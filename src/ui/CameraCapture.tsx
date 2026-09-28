@@ -1,25 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { detectVisibleFaces, DEFAULT_DETECT, type FaceHit } from '../camera/detect'
+import { findFaces, type FaceCandidate } from '../camera/find'
 import { classifyTopSticker, classifySideStickers, type Palette, type Rgb } from '../camera/classify'
 import {
   grabFrame,
   drawFrameToCanvas,
-  labelFrame,
   assignFaces,
   emptyCalibration,
   addCenter,
   calibrationReady,
-  type Blob,
   type Calibration,
 } from '../camera/frame'
-import {
-  createSolvedCube,
-  FACE_COLORS,
-  setColorAt,
-  type Color,
-  type Cube,
-  type Slot,
-} from '../cube/model'
+import { createSolvedCube, setColorAt, type Color, type Cube, type Slot } from '../cube/model'
 import { lastLayerSlots, SIDE_ORDER } from '../ui/StickerInput'
 import { validateLastLayer } from '../cube/solver'
 
@@ -54,12 +45,13 @@ export function CameraCapture({ onDone, onCancel }: Props) {
   const [error, setError] = useState<string | null>(null)
   void error
   const [running, setRunning] = useState(false)
-  const [hits, setHits] = useState<FaceHit[]>([])
+  const [hits, setHits] = useState<FaceCandidate[]>([])
   void hits
   const [needTop, setNeedTop] = useState(false)
   const [needFront, setNeedFront] = useState(false)
   void needTop
   const needTopRef = useRef<boolean>(false)
+  const topGuess = useRef<FaceCandidate | null>(null)
   const topChosen = useRef<string | null>(null)
   const [progress, setProgress] = useState({ u: 0, sides: 0 })
   const [notice, setNotice] = useState<string | null>(null)
@@ -72,7 +64,7 @@ export function CameraCapture({ onDone, onCancel }: Props) {
   void labelMap
 
   /** Latest frame's blobs, kept in a ref so the tap handler can use them. */
-  const lastBlobs = useRef<Blob[]>([])
+  const facesRef = useRef<FaceCandidate[]>([])
 
   const stop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -106,55 +98,43 @@ export function CameraCapture({ onDone, onCancel }: Props) {
 
   useEffect(() => stop, [stop])
 
-  /** Fold one frame's detection into the collected state. */
-  const ingest = useCallback((frameBlobs: Blob[], frameHits: FaceHit[]) => {
-    const labels = labelFrame(frameBlobs)
-    const sideBlobs = frameBlobs.filter((b) => b.id !== labels.uId)
-
-    // Calibrate from every face we can see, before naming anything.
-    for (const hit of frameHits) {
-      const name = faceOfBlob.current[hit.face]
-      if (name) cal.current = addCenter(cal.current, name, hit.center)
-    }
-
-    // Ask the user to name the faces once we have a usable frame.
-    if (!frontResolved.current && !needTopRef.current && sideBlobs.length >= 1) {
-      needTopRef.current = true
-      setNeedTop(true)
-    }
-
-    // The top face: store the nine raw samples, but only once the user has
-    // confirmed which face it is.
-    const topId = topChosen.current
-    if (topId) {
-      const uHit = frameHits.find((h) => h.face === topId)
-      if (uHit) {
-        for (let i = 0; i < 9; i++) {
-          if (!collected.current.u[i]) collected.current.u[i] = uHit.stickers[i]
-        }
+  /**
+   * Fold one frame into the collected state, before anything is named.
+   *
+   * Sampling never waits on the user. The earlier version only stored the top
+   * face once the user had tapped it, and only offered the tap once two faces
+   * were found, so a frame that came back short of faces left the app with
+   * nothing stored and nothing to ask: a deadlock. Now every frame contributes
+   * and the taps only decide what things get called.
+   */
+  const ingest = useCallback((faces: FaceCandidate[]) => {
+    if (faces.length === 0) return
+    // keep the best face by area as the working top face until told otherwise
+    const best = faces[0]
+    if (!topChosen.current) topGuess.current = best
+    const uFace = topChosen.current ? faces.find((f) => f.id === topChosen.current) : topGuess.current
+    if (uFace) {
+      for (let i = 0; i < 9; i++) {
+        if (!collected.current.u[i]) collected.current.u[i] = uFace.stickers[i]
       }
     }
-
-    // Side faces: only store once we know what each blob is called.
-    if (frontResolved.current) {
-      for (const b of sideBlobs) {
-        const face = faceOfBlob.current[b.id]
-        if (!face) continue
-        const hit = frameHits.find((h) => h.face === b.id)
-        if (!hit) continue
-        const row: (Rgb | null)[] = collected.current.sides[face] ?? [null, null, null]
-        for (let i = 0; i < 3; i++) if (!row[i]) row[i] = hit.stickers[i]
-        collected.current.sides[face] = row
-      }
+    // Side faces can only be filed once the user has named the cube, but their
+    // raw samples are kept per candidate so nothing has to be re-read.
+    for (const f of faces) {
+      if (f.id === uFace?.id) continue
+      const name = faceOfBlob.current[f.id]
+      if (!name) continue
+      const row: (Rgb | null)[] = collected.current.sides[name] ?? [null, null, null]
+      for (let i = 0; i < 3; i++) if (!row[i]) row[i] = f.stickers[i]
+      collected.current.sides[name] = row
     }
-
-    const uCount = collected.current.u.filter(Boolean).length
-    const sideCount = Object.values(collected.current.sides).reduce(
-      (n, row) => n + (row?.filter(Boolean).length ?? 0),
-      0
-    )
-    setProgress({ u: uCount, sides: sideCount })
+    setProgress(countCollected())
   }, [])
+
+  const countCollected = () => ({
+    u: collected.current.u.filter(Boolean).length,
+    sides: Object.values(collected.current.sides).reduce((n, r) => n + (r?.filter(Boolean).length ?? 0), 0),
+  })
 
   const loop = useCallback(() => {
     const v = videoRef.current
@@ -170,22 +150,18 @@ export function CameraCapture({ onDone, onCancel }: Props) {
     if (ctx && drew) drawOverlay(ctx, hitsRef.current, faceOfBlob.current)
     const img = grabFrame(v, FRAME_W, FRAME_H)
     if (img) {
-      const palette = bootstrapPalette()
-      const res = detectVisibleFaces(img, palette, DEFAULT_DETECT)
-      hitsRef.current = res.hits
-      const blobs: Blob[] = res.hits.map((h) => {
-        const cx = h.quad.reduce((s, p) => s + p.x, 0) / h.quad.length
-        const cy = h.quad.reduce((s, p) => s + p.y, 0) / h.quad.length
-        return { id: h.face, quad: h.quad, stickers: h.stickers, center: h.center, cx, cy, area: h.coverage }
-      })
-      lastBlobs.current = blobs
-      setHits(res.hits)
-      ingest(blobs, res.hits)
+      const faces = findFaces(img)
+      facesRef.current = faces
+      setHits(faces)
+      // Accumulate straight away, before any naming. Collecting data must never
+      // depend on the user having answered a question, or a frame that fails to
+      // be recognised leaves the app with nothing to show and nothing to ask.
+      ingest(faces)
     }
     rafRef.current = requestAnimationFrame(loop)
   }, [ingest])
 
-  const hitsRef = useRef<FaceHit[]>([])
+  const hitsRef = useRef<FaceCandidate[]>([])
 
   useEffect(() => {
     if (!running) return
@@ -210,8 +186,12 @@ export function CameraCapture({ onDone, onCancel }: Props) {
     const hit = hitsRef.current.find((h) => pointInQuad({ x, y }, h.quad))
     if (!hit) return
 
+    // Measuring the centre of the two faces the user picked gives the reference
+    // colours, so calibration follows the same taps instead of guessing.
+    cal.current = addCenter(cal.current, 'U', hit.stickers[4])
+
     if (needTopRef.current) {
-      topChosen.current = hit.face
+      topChosen.current = hit.id
       needTopRef.current = false
       setNeedTop(false)
       setNeedFront(true)
@@ -219,14 +199,28 @@ export function CameraCapture({ onDone, onCancel }: Props) {
     }
 
     const topId = topChosen.current
-    if (!topId || hit.face === topId) {
+    if (!topId || hit.id === topId) {
       setNotice('서로 다른 두 면을 눌러주세요: 위면 하나, 앞면 하나.')
       return
     }
-    const sideBlobs = lastBlobs.current.filter((b) => b.id !== topId)
-    const assign = assignFaces(hit.face, sideBlobs)
+    const others = hitsRef.current.filter((f) => f.id !== topId)
+    const sideBlobs = others.map((f) => ({
+      id: f.id,
+      quad: f.quad,
+      stickers: f.stickers,
+      center: f.stickers[4],
+      cx: f.quad.reduce((a, p) => a + p.x, 0) / f.quad.length,
+      cy: f.quad.reduce((a, p) => a + p.y, 0) / f.quad.length,
+      area: f.blocks,
+    }))
+    const assign = assignFaces(hit.id, sideBlobs)
     const map: Record<string, Color> = { [topId]: 'U' }
     for (const [id, f] of Object.entries(assign)) if (f) map[id] = f
+    for (const [id, name] of Object.entries(map)) {
+      if (name === 'U') continue
+      const face = hitsRef.current.find((f) => f.id === id)
+      if (face) cal.current = addCenter(cal.current, name as Color, face.stickers[4])
+    }
     faceOfBlob.current = map
     frontResolved.current = true
     setLabelMap(map)
@@ -378,11 +372,11 @@ function pointInQuad(p: { x: number; y: number }, q: { x: number; y: number }[])
 
 function drawOverlay(
   ctx: CanvasRenderingContext2D,
-  hits: FaceHit[],
+  hits: FaceCandidate[],
   labelMap: Record<string, Color>
 ) {
   for (const hit of hits) {
-    const named = labelMap[hit.face]
+    const named = labelMap[hit.id]
     ctx.strokeStyle = named ? '#5b8cff' : '#ffd166'
     ctx.lineWidth = 3
     ctx.beginPath()
@@ -397,38 +391,6 @@ function drawOverlay(
       ctx.fillText(named, cx - 6, cy)
     }
   }
-}
-
-/**
- * Coarse palette used only to FIND blobs. Names here can be wrong under a colour
- * cast, which is fine: blob finding only needs the three big regions, and the
- * real references are measured from the frame afterwards.
- */
-function bootstrapPalette(): Palette {
-  const p = {} as Palette
-  for (const c of ['U', 'R', 'F', 'L', 'B'] as Color[]) {
-    const hex = FACE_COLORS[c].replace('#', '')
-    p[c] = hexToLabQuick(parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16))
-  }
-  return p
-}
-
-function hexToLabQuick(r: number, g: number, b: number) {
-  const lin = (v: number) => {
-    const c = v / 255
-    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
-  }
-  const R = lin(r)
-  const G = lin(g)
-  const B = lin(b)
-  const x = (R * 0.4124564 + G * 0.3575761 + B * 0.1804375) / 0.95047
-  const y = R * 0.2126729 + G * 0.7151522 + B * 0.072175
-  const z = (R * 0.0193339 + G * 0.119192 + B * 0.9503041) / 1.08883
-  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116)
-  const fx = f(x)
-  const fy = f(y)
-  const fz = f(z)
-  return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) }
 }
 
 /** Live readout of what has been read, so a mistake is visible not silent. */
