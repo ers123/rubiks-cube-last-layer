@@ -231,7 +231,7 @@ export function CameraCapture({ onDone, onCancel }: Props) {
     const c = collected.current
     const palette: Palette = cal.current.palette
     if (!calibrationReady(cal.current)) {
-      setNotice('아직 모든 면을 못 봤어요. 큐브를 돌려서 뒤쪽 면도 보여주세요.')
+      setNotice('아직 5개 기준 색을 못 잴 있어요. 두 번(앞/뒤) 다 보여주세요.')
       return
     }
 
@@ -279,8 +279,13 @@ export function CameraCapture({ onDone, onCancel }: Props) {
 
   const status = useMemo(() => {
     if (!running) return '카메라 준비 중'
-    if (progress.u < 9) return '위면 스티커를 읽는 중'
-    if (progress.sides < 12) return `옆면 ${progress.sides}/12 · 큐브를 180도 돌려주세요`
+    if (facesRef.current.length < 2) {
+      return '면을 못 찾았어요. 큐브를 비스듬히 들어 3개 면이 보이게 하세요.'
+    }
+    if (progress.u < 9) return `윗면 ${progress.u}/9 읽는 중`
+    if (progress.sides < 12) {
+      return `옆면 ${progress.sides}/12 · 같은 각도로 180도 돌려서 뒤쪽을 보여주세요`
+    }
     return '다 읽었습니다'
   }, [running, progress])
 
@@ -297,7 +302,11 @@ export function CameraCapture({ onDone, onCancel }: Props) {
         />
         {!running && (
           <div className="cam-cover">
-            <p>큐브의 마지막 층이 위로 오게 들고, 두 면이 보이게 하세요.</p>
+            <p>
+              큐브를 비스듬히 들고 <b>3개 면</b>이 보이게 하세요.
+              <br />
+              정면으로 들면 맨 위 층이 가늘게 보여 읽지 못합니다.
+            </p>
             <button type="button" className="primary" onClick={start}>
               카메라 켜기
             </button>
@@ -314,7 +323,12 @@ export function CameraCapture({ onDone, onCancel }: Props) {
       </div>
 
       <div className="actions">
-        <button type="button" className="primary" onClick={finish} disabled={!running}>
+        <button
+          type="button"
+          className="primary"
+          onClick={finish}
+          disabled={!running || progress.u < 9 || progress.sides < 12}
+        >
           이 상태로 풀기
         </button>
         <button type="button" className="ghost" onClick={stop}>

@@ -44,6 +44,24 @@ export type FindOptions = {
   minSolidity: number
   /** fraction of a sticker patch averaged */
   patchRadius: number
+  /**
+   * Largest spread, in dE, allowed across the nine samples of one face.
+   *
+   * A real face is nine stickers of one colour, so the samples all sit on top
+   * of each other. This is the check that catches a cube held face-on: the top
+   * face is then a sliver a few pixels tall, the nine sample points spill off
+   * it onto the face below, and the readings come back as a mix of colours.
+   * Without it the app cheerfully reported nine yellow stickers for a face it
+   * could not actually see.
+   */
+  maxSampleSpread: number
+  /**
+   * Shortest side of the quad, as a fraction of the longest.
+   *
+   * A face seen at a readable angle is never this squashed. Below roughly a
+   * third, the face is too foreshortened to place nine stickers on it.
+   */
+  minAspect: number
 }
 
 export const DEFAULT_FIND: FindOptions = {
@@ -51,6 +69,8 @@ export const DEFAULT_FIND: FindOptions = {
   minBlocks: 14,
   minSolidity: 0.34,
   patchRadius: 3,
+  maxSampleSpread: 26,
+  minAspect: 0.3,
 }
 
 type Block = { lab: Lab; rgb: RgbPatch; x: number; y: number }
@@ -453,6 +473,19 @@ function collectFaces(blocks: Block[], img: RGBImage, options: FindOptions): Fac
         stickers.push(samplePatch(img, bilinear(quad, (c + 0.5) / 3, (r + 0.5) / 3), options.patchRadius))
       }
     }
+
+    // A real face is one colour across all nine samples; a sliver is not.
+    const sampleLabs = stickers.map((s) => rgbToLab(s))
+    let spread = 0
+    for (const a of sampleLabs) {
+      for (const b of sampleLabs) spread = Math.max(spread, deltaE(a, b))
+    }
+    if (spread > options.maxSampleSpread) continue
+
+    // and it is not a squashed sliver
+    const sideLens = quad.map((p, i) => Math.hypot(quad[(i + 1) % 4].x - p.x, quad[(i + 1) % 4].y - p.y))
+    const aspect = Math.min(...sideLens) / Math.max(...sideLens)
+    if (aspect < options.minAspect) continue
 
     out.push({
       id: `f${n++}`,
