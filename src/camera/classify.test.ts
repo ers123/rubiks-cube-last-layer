@@ -4,10 +4,12 @@ import {
   chromaDist,
   deltaE,
   WHITE_MATCH_THRESHOLD,
+  CLUSTER_MERGE_THRESHOLD,
   classifySideStickers,
   classifyTopSticker,
   averagePatch,
   type Rgb,
+  type Lab,
   type Palette,
 } from './classify'
 import { type Color } from '../cube/model'
@@ -204,6 +206,55 @@ describe('side sticker classification', () => {
     const { colors, confident } = classifySideStickers(samples, paletteFrom(centers))
     expect(confident).toBe(true)
     expect(colors).toEqual(sideTruth)
+  })
+
+  it('keeps a wide gap between one face and the next', () => {
+    // Guards CLUSTER_MERGE_THRESHOLD. The spread inside a single flat face must
+    // stay well under it, and the gap between real colours well over it.
+    let worstSpread = 0
+    let bestGap = Infinity
+    for (const light of Object.keys(LIGHTS) as (keyof typeof LIGHTS)[]) {
+      const rand = rng(31)
+      const opts = { ...LIGHTS[light], rand }
+      const centers: Record<string, Lab> = {}
+      for (const c of ['R', 'F', 'L', 'B'] as Color[]) {
+        centers[c] = rgbToLab(photograph(NOMINAL[c], opts, 1))
+      }
+      const names = Object.keys(centers)
+      for (const c of names) {
+        for (let s = 0; s < 6; s++) {
+          worstSpread = Math.max(
+            worstSpread,
+            chromaDist(rgbToLab(photograph(NOMINAL[c as Color], opts, 60 + s)), centers[c])
+          )
+        }
+      }
+      for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+          bestGap = Math.min(bestGap, chromaDist(centers[names[i]], centers[names[j]]))
+        }
+      }
+    }
+    expect(worstSpread, 'within-face spread must stay under the merge threshold').toBeLessThan(
+      CLUSTER_MERGE_THRESHOLD
+    )
+    expect(bestGap, 'between-colour gap must stay over the merge threshold').toBeGreaterThan(
+      CLUSTER_MERGE_THRESHOLD
+    )
+    expect(bestGap / Math.max(worstSpread, 0.5)).toBeGreaterThan(2)
+  })
+
+  it('does not split one flat colour into four groups', () => {
+    // Nine samples of a single colour plus noise must collapse to one group.
+    const rand = rng(77)
+    const opts = { ...LIGHTS.warm, rand }
+    const samples = Array.from({ length: 9 }, (_, i) => photograph(NOMINAL.R, opts, i))
+    const centers: Record<string, Rgb> = {}
+    for (const c of ['U', 'R', 'F', 'L', 'B'] as Color[]) centers[c] = photograph(NOMINAL[c], opts, 90)
+    const { colors, confident } = classifySideStickers(samples, paletteFrom(centers))
+    expect(new Set(colors).size, `got ${colors.join(',')}`).toBe(1)
+    expect(colors[0]).toBe('R')
+    expect(confident).toBe(true)
   })
 
   it('is stable across many random seeds', () => {

@@ -25,6 +25,16 @@ export type Palette = Record<Color, Lab | null>
 
 export const SIDE_COLORS: Color[] = ['R', 'F', 'L', 'B']
 
+/**
+ * Two groups closer than this in chroma are treated as the same colour.
+ *
+ * Measured, not guessed: under neutral, warm, very warm, dim, cool and noisy
+ * capture, the spread inside a single flat face stays under 6, while the
+ * smallest gap between two genuinely different side colours is 20. Sitting at
+ * 12 leaves margin on both sides, and the guard test fails if that ever closes.
+ */
+export const CLUSTER_MERGE_THRESHOLD = 12
+
 /** sRGB -> CIELAB, via XYZ with the sRGB transfer function undone. */
 export function rgbToLab({ r, g, b }: Rgb): Lab {
   const lin = (v: number) => {
@@ -131,21 +141,70 @@ export function classifySideStickers(
     if (!moved) break
   }
 
-  // Map each cluster to a distinct colour, nearest reference first. Each side
-  // colour must be used exactly once, which is the constraint that removes the
-  // white/yellow ambiguity: an uncertain reading can only borrow a colour that
-  // no other cluster claimed.
-  const clusters = centroids.map((c, idx) => ({ idx, ...c }))
-  clusters.sort((a, b) => b.idx - a.idx)
+  // Fixed k forces the clustering to split the data into exactly four groups
+  // even when a face is a single flat colour and the only variation is sensor
+  // noise. That produces four meaningless groups, and then naming them wastes
+  // three of the four reference colours. So merge anything that is not
+  // meaningfully different and let the data decide the cluster count.
+  const sizes = new Array(centroids.length).fill(0)
+  for (const a of assign) sizes[a]++
+  for (let c = 0; c < centroids.length; c++) {
+    if (sizes[c] === 0) continue
+    let acc = { L: 0, a: 0, b: 0 }
+    let n = 0
+    for (let i = 0; i < labs.length; i++) {
+      if (assign[i] === c) {
+        acc = { L: acc.L + labs[i].L, a: acc.a + labs[i].a, b: acc.b + labs[i].b }
+        n++
+      }
+    }
+    centroids[c] = { L: acc.L / n, a: acc.a / n, b: acc.b / n }
+  }
+
+  for (;;) {
+    let bi = -1
+    let bj = -1
+    let bd = CLUSTER_MERGE_THRESHOLD
+    for (let i = 0; i < centroids.length; i++) {
+      if (sizes[i] === 0) continue
+      for (let j = i + 1; j < centroids.length; j++) {
+        if (sizes[j] === 0) continue
+        const d = chromaDist(centroids[i], centroids[j])
+        if (d < bd) {
+          bd = d
+          bi = i
+          bj = j
+        }
+      }
+    }
+    if (bi < 0) break
+    const total = sizes[bi] + sizes[bj]
+    centroids[bi] = {
+      L: (centroids[bi].L * sizes[bi] + centroids[bj].L * sizes[bj]) / total,
+      a: (centroids[bi].a * sizes[bi] + centroids[bj].a * sizes[bj]) / total,
+      b: (centroids[bi].b * sizes[bi] + centroids[bj].b * sizes[bj]) / total,
+    }
+    sizes[bi] = total
+    sizes[bj] = 0
+    for (let i = 0; i < assign.length; i++) if (assign[i] === bj) assign[i] = bi
+  }
+
+  // Name each surviving cluster, biggest first, so the cluster with the most
+  // evidence gets first claim on the reference it matches best.
+  const live = centroids
+    .map((lab, idx) => ({ idx, size: sizes[idx], lab }))
+    .filter((c) => c.size > 0)
+    .sort((a, b) => b.size - a.size || a.idx - b.idx)
+
   const used = new Set<Color>()
   const clusterToColor = new Map<number, Color>()
-  for (const cl of clusters) {
+  for (const cl of live) {
     let pick: Color | null = null
     let bestD = Infinity
     for (const color of SIDE_COLORS) {
       const ref = palette[color]
       if (!ref || used.has(color)) continue
-      const d = chromaDist(cl, ref)
+      const d = chromaDist(cl.lab, ref)
       if (d < bestD) {
         bestD = d
         pick = color
@@ -158,7 +217,7 @@ export function classifySideStickers(
   }
 
   const colors = assign.map((c) => clusterToColor.get(c) ?? null)
-  const confident = used.size === 4 && colors.every((c) => c !== null)
+  const confident = used.size === live.length && live.length > 0 && colors.every((c) => c !== null)
   return { colors, confident }
 }
 
