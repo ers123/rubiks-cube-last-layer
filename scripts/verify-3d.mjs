@@ -64,8 +64,18 @@ page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
 await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(1200)
 
+// The app now opens on the camera screen, so step to the manual screen first;
+// that is also the screen the 3D cube lives on.
+const manual = await page.$('text=수동으로 입력')
+if (!manual) {
+  console.error('FAIL: no way to reach the manual screen')
+  process.exit(1)
+}
+await manual.click()
+await page.waitForTimeout(600)
+
 const canvas = await page.evaluate(() => {
-  const c = document.querySelector('canvas')
+  const c = document.querySelector('canvas:not(.cam-canvas)')
   return c ? { w: c.width, h: c.height, gl: !!c.getContext('webgl2') || true } : null
 })
 console.log('canvas:', JSON.stringify(canvas))
@@ -90,7 +100,7 @@ if (usedFallback) {
  */
 async function frameStats(label) {
   const file = `/tmp/cube-frame-${label}.png`
-  const el = await page.$('canvas')
+  const el = await page.$('canvas:not(.cam-canvas)')
   await el.screenshot({ path: file })
   const buf = await readFile(file)
   // crude but sufficient: a blank PNG compresses to almost nothing

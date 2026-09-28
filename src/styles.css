@@ -130,3 +130,21 @@ button.ghost {
 .alghelp li { margin-bottom: 6px; font-size: 13px; }
 .alghelp code { color: var(--accent); font-size: 12px; }
 .alghelp span { color: var(--muted); }
+
+/* camera capture */
+.cam { display: flex; flex-direction: column; gap: 12px; }
+.cam-stage { position: relative; width: 100%; aspect-ratio: 4 / 3; background: #000; border-radius: 14px; overflow: hidden; }
+.cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+.cam-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cam-cover { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: rgba(13,15,20,0.9); }
+.cam-cover p { margin: 0; color: var(--muted); font-size: 13px; }
+.cam-status { margin: 0; text-align: center; font-weight: 600; }
+.cam-hint { margin: 0; text-align: center; color: var(--accent); font-size: 13px; }
+.cam-bad { margin: 0; text-align: center; color: var(--bad); font-size: 13px; }
+
+.mininet { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.mininet-title { color: var(--muted); font-size: 11px; align-self: flex-start; }
+.mininet-row { display: flex; align-items: center; gap: 8px; }
+.mininet-label { color: var(--muted); font-size: 11px; width: 14px; }
+.mini { width: 22px; height: 22px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.4); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

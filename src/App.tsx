@@ -1,15 +1,16 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { CubeView, type CubeViewHandle } from './render/CubeView'
 import { StickerInput } from './ui/StickerInput'
+import { CameraCapture } from './ui/CameraCapture'
 import { createSolvedCube, applyMove, applySequence, parseMoves, type Cube, type Move } from './cube/model'
 import { solveLastLayer, type Solution } from './cube/solver'
 
-type Screen = 'input' | 'solve'
+type Screen = 'camera' | 'input' | 'solve'
 
 export default function App() {
   const [cube, setCube] = useState<Cube>(() => createSolvedCube())
   const [revision, setRevision] = useState(0)
-  const [screen, setScreen] = useState<Screen>('input')
+  const [screen, setScreen] = useState<Screen>('camera')
   const [solution, setSolution] = useState<Solution | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [done, setDone] = useState(false)
@@ -77,17 +78,32 @@ export default function App() {
         <p className="sub">마지막 층만, 외울 alg 최소로</p>
       </header>
 
+      {screen === 'camera' && (
+        <CameraCapture
+          onDone={(c) => {
+            handleInput(c)
+            setStepIndex(0)
+            setDone(false)
+            setScreen('solve')
+          }}
+          onCancel={() => setScreen('input')}
+        />
+      )}
+
       {screen === 'input' && (
         <>
-          {!no3d && <CubeView ref={viewRef} cube={cube} revision={revision} size={300} onUnavailable={() => setNo3d(true)} />}
+          {!no3d && <CubeView ref={viewRef} cube={cube} revision={revision} size={260} onUnavailable={() => setNo3d(true)} />}
           {no3d && <p className="sub">3D 미리보기를 쓸 수 없어 2D로 보여드립니다.</p>}
           <StickerInput cube={cube} onChange={handleInput} onReset={handleSolve} />
+          <button type="button" className="ghost" onClick={() => setScreen('camera')}>
+            카메라로 다시 읽기
+          </button>
         </>
       )}
 
       {screen === 'solve' && solution && (
         <>
-          {!no3d && <CubeView ref={viewRef} cube={cube} revision={revision} size={300} onUnavailable={() => setNo3d(true)} />}
+          {!no3d && <CubeView ref={viewRef} cube={cube} revision={revision} size={260} onUnavailable={() => setNo3d(true)} />}
 
           <div className="verdict">
             {solution.alreadySolved && <p className="ok">마지막 층 이미 완성입니다 🎉</p>}
@@ -146,8 +162,11 @@ export default function App() {
             >
               전체 재생
             </button>
+            <button type="button" className="ghost" onClick={() => setScreen('camera')}>
+              카메라로 다시
+            </button>
             <button type="button" className="ghost" onClick={() => setScreen('input')}>
-              상태 수정
+              수동 수정
             </button>
             <button type="button" className="ghost" onClick={handleReset}>
               처음부터

@@ -5,3 +5,4 @@ dist
 .gstack
 tsconfig.tsbuildinfo
 screenshots
+scripts/.fake-camera-build
