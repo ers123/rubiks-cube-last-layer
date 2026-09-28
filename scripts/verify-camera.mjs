@@ -75,9 +75,9 @@ await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' })
 
 // The camera button must be reachable, which is the thing a user complained
 // was missing.
-const camButton = await page.$('text=카메라 켜기')
+const camButton = await page.$('text=실시간 카메라')
 if (!camButton) {
-  console.error('FAIL: no camera button on the first screen')
+  console.error('FAIL: no way to start the camera from the first screen')
   await browser.close()
   server.close()
   process.exit(1)
