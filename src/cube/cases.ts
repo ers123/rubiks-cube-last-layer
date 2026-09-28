@@ -1,4 +1,4 @@
-import { createSolvedCube, type Cube, type Color } from './model'
+import { createSolvedCube, applySequence, type Cube, type Color } from './model'
 import { solveLastLayer, isLastLayerSolved, type Solution } from './solver'
 
 /**
@@ -102,38 +102,68 @@ export function netToCube(n: Net): Cube {
 
 const netKey = (n: Net) => n.uFace.join('') + '|' + n.sideRows.map((r) => r.colors.join('')).join('|')
 
-/** The same state seen after a U turn, so rotations of one case count once. */
+/**
+ * The same case seen after a U turn, so rotations of one case count once.
+ *
+ * This has to be a real rotation of the cube, not arithmetic on the net: a U
+ * turn rotates the U face, cycles the four side rows, and moves the U edges
+ * between faces. The earlier hand-rolled version only shifted colours sideways
+ * within each row, which folded unrelated cases onto the same key and threw
+ * most of the gallery away.
+ */
 function rotateNetU(n: Net): Net {
-  const u = n.uFace
-  return {
-    uFace: [u[2], u[5], u[8], u[1], u[4], u[7], u[0], u[3], u[6]],
-    sideRows: n.sideRows.map((row) => ({ face: row.face, colors: [row.colors[2], row.colors[0], row.colors[1]] })),
-  }
+  const cube = netToCube(n)
+  applySequence(cube, 'U')
+  return netOf(cube)
 }
 
-/** A last layer with every corner and edge oriented, but permuted. */
+/** Rotate a position or direction around the vertical axis, 90° steps. */
+function rotY(x: number, z: number, k: number): [number, number] {
+  let cx = x
+  let cz = z
+  for (let i = 0; i < ((k % 4) + 4) % 4; i++) {
+    const nx = -cz
+    cz = cx
+    cx = nx
+  }
+  return [cx, cz]
+}
+
+/** How many quarter turns about the vertical axis take `from` to `to`. */
+function stepsTo(from: { x: number; z: number }, to: { x: number; z: number }): number {
+  for (let k = 0; k < 4; k++) {
+    if (rotY(from.x, from.z, k)[0] === to.x && rotY(from.x, from.z, k)[1] === to.z) return k
+  }
+  return 0
+}
+
+/**
+ * A last layer with every corner and edge oriented, but permuted.
+ *
+ * Two things this has to get right, both of which the first attempt got wrong:
+ * a piece moving from one slot to another is a rotation of the cube's top ring,
+ * not a translation, so sticker directions have to be rotated too; and the order
+ * of stickers inside a slot is not consistent between slots, so copying by array
+ * position scatters colours onto the wrong faces.
+ */
 function pllCube(cp: number[], ep: number[]): Cube {
   const c = createSolvedCube()
-  const cornerSets = CORNER_SLOTS.map(({ x, z }) =>
-    c[uSlot(x, z)].map((st) => ({ dir: st.dir.x, diry: st.dir.y, dirz: st.dir.z, color: st.color }))
-  )
-  for (let i = 0; i < 4; i++) {
-    const from = cornerSets[cp[i]]
-    const to = c[uSlot(CORNER_SLOTS[i].x, CORNER_SLOTS[i].z)]
-    to.forEach((st, k) => {
-      st.color = from[k].color
-    })
+  const dirKey = (x: number, y: number, z: number) => `${x},${y},${z}`
+  // Read from a snapshot: a permutation is a set of swaps, so writing into a
+  // slot that a later move still needs to read from would corrupt the result.
+  const snapshot = c.map((slot) => slot.map((st) => ({ x: st.dir.x, y: st.dir.y, z: st.dir.z, color: st.color })))
+
+  const movePiece = (from: { x: number; z: number }, to: { x: number; z: number }) => {
+    const k = stepsTo(from, to)
+    for (const st of snapshot[uSlot(from.x, from.z)]) {
+      const [dx, dz] = rotY(st.x, st.z, k)
+      const dst = c[uSlot(to.x, to.z)].find((d) => dirKey(d.dir.x, d.dir.y, d.dir.z) === dirKey(dx, st.y, dz))
+      if (dst) dst.color = st.color
+    }
   }
-  const edgeSets = EDGE_SLOTS.map(({ x, z }) =>
-    c[uSlot(x, z)].map((st) => ({ dx: st.dir.x, dz: st.dir.z, color: st.color }))
-  )
-  for (let i = 0; i < 4; i++) {
-    const from = edgeSets[ep[i]]
-    const to = c[uSlot(EDGE_SLOTS[i].x, EDGE_SLOTS[i].z)]
-    to.forEach((st, k) => {
-      st.color = from[k].color
-    })
-  }
+
+  for (let i = 0; i < 4; i++) movePiece(CORNER_SLOTS[cp[i]], CORNER_SLOTS[i])
+  for (let i = 0; i < 4; i++) movePiece(EDGE_SLOTS[ep[i]], EDGE_SLOTS[i])
   return c
 }
 
@@ -158,11 +188,6 @@ const parity = (p: number[]) => {
   return inv % 2
 }
 
-const NAMES = [
-  'A', 'E', 'F', 'G', 'H', 'J', 'N', 'R', 'T', 'Ua', 'Ub',
-  'V', 'Y', 'Z', 'a', 'b', 'c', 'e', 'f', 'g', 'h',
-]
-
 function describe(n: Net): string {
   const correctCorners = [0, 1, 2, 3].filter((i) => {
     const c = n.uFace[[0, 2, 8, 6][i]]
@@ -173,24 +198,17 @@ function describe(n: Net): string {
 }
 
 /**
- * WORK IN PROGRESS — NOT WIRED INTO THE APP, NOT TRUSTWORTHY YET.
+ * Every last-layer permutation, folded by rotation, as pictures.
  *
- * The idea is right and the tests above this comment confirmed the useful half:
- * every case it produces really is unsolved, and every solution it produces
- * really does solve its case. But the rotation folding is wrong, so it yields
- * 7 cases where the correct answer is not what it should be. Shipping a gallery
- * that silently drops cases would be worse than shipping nothing, so this is
- * parked until the folding is correct.
+ * The count is 72, not 21. Turning the cube in your hand does not change the
+ * problem, so the 288 permutations collapse to 72 once a quarter turn of the top
+ * is treated as the same case. The familiar "21 cases" is a further grouping
+ * that also merges states which need different algorithm orientations; showing
+ * 72 honest pictures beats hiding 51 of them.
  *
- * The concrete bug: `rotateNetU` does not perform a U turn. It rotates the U
- * face and shifts colours sideways within each side row, but a real U turn
- * rotates the U face AND cycles the four side rows AND moves the U edges
- * between faces. Because the fold is too aggressive, unrelated cases collide on
- * the same key and get discarded.
- *
- * The fix is to fold with a real rotation — apply the U move to the cube with
- * `applySequence` and read the net back — instead of hand-rolling the net
- * arithmetic.
+ * Every case is checked before it is returned: it has to be genuinely unsolved
+ * and its solution has to actually solve it. A gallery with a wrong picture in
+ * it is worse than no gallery.
  */
 export function buildCases(): CaseNet[] {
   const seen = new Set<string>()
@@ -213,8 +231,8 @@ export function buildCases(): CaseNet[] {
       if (solution.failure) continue
       cases.push({
         ...netOf(cube),
-        id: `case-${cases.length}`,
-        label: NAMES[cases.length] ?? `케이스 ${cases.length + 1}`,
+        id: `${cases.length}`,
+        label: `케이스 ${cases.length + 1}`,
         summary: describe(netOf(cube)),
         solution,
       })

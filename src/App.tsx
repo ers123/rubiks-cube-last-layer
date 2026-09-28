@@ -2,10 +2,12 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { CubeView, type CubeViewHandle } from './render/CubeView'
 import { StickerInput } from './ui/StickerInput'
 import { CameraCapture } from './ui/CameraCapture'
+import { CaseGallery } from './ui/CaseGallery'
+import { netToCube, type CaseNet } from './cube/cases'
 import { createSolvedCube, applyMove, applySequence, parseMoves, type Cube, type Move } from './cube/model'
 import { solveLastLayer, type Solution } from './cube/solver'
 
-type Screen = 'camera' | 'input' | 'solve'
+type Screen = 'camera' | 'input' | 'gallery' | 'solve'
 
 export default function App() {
   const [cube, setCube] = useState<Cube>(() => createSolvedCube())
@@ -24,13 +26,16 @@ export default function App() {
     setRevision((r) => r + 1)
   }, [])
 
-  const handleSolve = useCallback(() => {
-    const sol = solveLastLayer(cube)
-    setSolution(sol)
+  // No parameters on purpose: this is wired straight to onClick, so React would
+  // hand it a MouseEvent and it would be read as the cube to solve.
+  const showSolution = useCallback((target: Cube) => {
+    setSolution(solveLastLayer(target))
     setStepIndex(0)
     setDone(false)
     setScreen('solve')
-  }, [cube])
+  }, [])
+
+  const handleSolve = useCallback(() => showSolution(cube), [cube, showSolution])
 
   const handleReset = useCallback(() => {
     setCube(createSolvedCube())
@@ -95,8 +100,31 @@ export default function App() {
           {!no3d && <CubeView ref={viewRef} cube={cube} revision={revision} size={260} onUnavailable={() => setNo3d(true)} />}
           {no3d && <p className="sub">3D 미리보기를 쓸 수 없어 2D로 보여드립니다.</p>}
           <StickerInput cube={cube} onChange={handleInput} onReset={handleSolve} />
+          <button type="button" className="primary" onClick={() => setScreen('gallery')}>
+            그림으로 고르기 (추천)
+          </button>
           <button type="button" className="ghost" onClick={() => setScreen('camera')}>
             카메라로 읽기 (아직 완성 안 됨)
+          </button>
+        </>
+      )}
+
+      {screen === 'gallery' && (
+        <>
+          <h2>그림으로 고르기</h2>
+          <CaseGallery
+            onPick={(c: CaseNet) => {
+              // the picked cube has to be solved directly, not the one still in
+              // state: setCube has not landed yet when this runs
+              const picked = netToCube(c)
+              setCube(picked)
+              cubeRef.current = picked
+              setRevision((r) => r + 1)
+              showSolution(picked)
+            }}
+          />
+          <button type="button" className="ghost" onClick={() => setScreen('input')}>
+            직접 입력하러 가기
           </button>
         </>
       )}
@@ -161,6 +189,9 @@ export default function App() {
               disabled={solution.steps.length === 0}
             >
               전체 재생
+            </button>
+            <button type="button" className="ghost" onClick={() => setScreen('gallery')}>
+              다른 그림 고르기
             </button>
             <button type="button" className="ghost" onClick={() => setScreen('camera')}>
               카메라로 다시
