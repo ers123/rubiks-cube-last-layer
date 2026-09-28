@@ -10,7 +10,7 @@ type Screen = 'camera' | 'input' | 'solve'
 export default function App() {
   const [cube, setCube] = useState<Cube>(() => createSolvedCube())
   const [revision, setRevision] = useState(0)
-  const [screen, setScreen] = useState<Screen>('camera')
+  const [screen, setScreen] = useState<Screen>('input')
   const [solution, setSolution] = useState<Solution | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [done, setDone] = useState(false)
@@ -96,7 +96,7 @@ export default function App() {
           {no3d && <p className="sub">3D 미리보기를 쓸 수 없어 2D로 보여드립니다.</p>}
           <StickerInput cube={cube} onChange={handleInput} onReset={handleSolve} />
           <button type="button" className="ghost" onClick={() => setScreen('camera')}>
-            카메라로 다시 읽기
+            카메라로 읽기 (아직 완성 안 됨)
           </button>
         </>
       )}

@@ -51,7 +51,6 @@ export function CameraCapture({ onDone, onCancel }: Props) {
   const [needFront, setNeedFront] = useState(false)
   void needTop
   const needTopRef = useRef<boolean>(false)
-  const topGuess = useRef<FaceCandidate | null>(null)
   const topChosen = useRef<string | null>(null)
   const [progress, setProgress] = useState({ u: 0, sides: 0 })
   const [notice, setNotice] = useState<string | null>(null)
@@ -69,6 +68,8 @@ export function CameraCapture({ onDone, onCancel }: Props) {
   const facesRef = useRef<FaceCandidate[]>([])
   const stillRef = useRef<HTMLImageElement | null>(null)
   const stillSizeRef = useRef({ w: FRAME_W, h: FRAME_H })
+  const [stillSize, setStillSize] = useState({ w: FRAME_W, h: FRAME_H })
+  stillSizeRef.current = stillSize
 
   const stop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -114,10 +115,11 @@ export function CameraCapture({ onDone, onCancel }: Props) {
    */
   const ingest = useCallback((faces: FaceCandidate[]) => {
     if (faces.length === 0) return
-    // keep the best face by area as the working top face until told otherwise
-    const best = faces[0]
-    if (!topChosen.current) topGuess.current = best
-    const uFace = topChosen.current ? faces.find((f) => f.id === topChosen.current) : topGuess.current
+    // No guessing. The largest region is the front face, not the top one: a
+    // face held at an angle shows its front larger than its top, so guessing
+    // "biggest is the top" read the front face and reported nine stickers of the
+    // wrong colour. Nothing is stored until the user says which face it is.
+    const uFace = topChosen.current ? faces.find((f) => f.id === topChosen.current) : null
     if (uFace) {
       for (let i = 0; i < 9; i++) {
         if (!collected.current.u[i]) collected.current.u[i] = uFace.stickers[i]
@@ -171,6 +173,7 @@ export function CameraCapture({ onDone, onCancel }: Props) {
       const faces = findFaces(rgb)
       facesRef.current = faces
       setHits(faces)
+      setStillSize({ w: W, h: H })
       stillSizeRef.current = { w: W, h: H }
       setStill(img)
       stillRef.current = img
@@ -178,7 +181,6 @@ export function CameraCapture({ onDone, onCancel }: Props) {
       stop()
       setNeedTop(faces.length > 0)
       needTopRef.current = faces.length > 0
-      topGuess.current = faces[0] ?? null
       setNeedFront(false)
       ingest(faces)
       setNotice(
@@ -219,6 +221,9 @@ export function CameraCapture({ onDone, onCancel }: Props) {
         ctx.drawImage(img, 0, 0, cw, ch)
         drawOverlay(ctx, hitsRef.current, faceOfBlob.current)
       }
+      // keep going: the photo may not have decoded yet, and the overlay has to
+      // change colour once the user names a face
+      rafRef.current = requestAnimationFrame(loop)
       return
     }
     const v = videoRef.current
@@ -308,7 +313,30 @@ export function CameraCapture({ onDone, onCancel }: Props) {
     frontResolved.current = true
     setLabelMap(map)
     setNeedFront(false)
+    // A live stream keeps calling ingest on its own. A still photo does not, so
+    // the tap has to trigger the read or naming a face would change nothing.
+    ingest(facesRef.current)
   }
+
+  const onTapTop = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!needTopRef.current) return onTapFace(e)
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const rect = canvas.getBoundingClientRect()
+      const x = ((e.clientX - rect.left) / rect.width) * canvas.width
+      const y = ((e.clientY - rect.top) / rect.height) * canvas.height
+      const hit = hitsRef.current.find((h) => pointInQuad({ x, y }, h.quad))
+      if (!hit) return
+      topChosen.current = hit.id
+      needTopRef.current = false
+      setNeedTop(false)
+      setNeedFront(true)
+      cal.current = addCenter(cal.current, 'U', hit.stickers[4])
+      ingest(facesRef.current)
+    },
+    [ingest, onTapFace]
+  )
 
   const finish = useCallback(() => {
     const c = collected.current
@@ -361,27 +389,32 @@ export function CameraCapture({ onDone, onCancel }: Props) {
   }, [onDone])
 
   const status = useMemo(() => {
-    if (!running) return '카메라 준비 중'
+    if (!running && !still) return '카메라 준비 중'
     if (facesRef.current.length < 2) {
       return '면을 못 찾았어요. 큐브를 비스듬히 들어 3개 면이 보이게 하세요.'
     }
+    if (needTop) return '테두리 중 맨 위 면(마지막 층)을 눌러주세요'
+    if (needFront) return '이제 앞면(정면)을 눌러주세요'
     if (progress.u < 9) return `윗면 ${progress.u}/9 읽는 중`
     if (progress.sides < 12) {
       return `옆면 ${progress.sides}/12 · 같은 각도로 180도 돌려서 뒤쪽을 보여주세요`
     }
     return '다 읽었습니다'
-  }, [running, progress])
+  }, [running, still, progress, needTop, needFront])
 
   return (
     <div className="cam">
-      <div className="cam-stage">
+      <div
+        className="cam-stage"
+        style={still ? { aspectRatio: `${stillSize.w} / ${stillSize.h}` } : undefined}
+      >
         <video ref={videoRef} playsInline muted className="cam-video" />
         <canvas
           ref={canvasRef}
-          width={FRAME_W}
-          height={FRAME_H}
+          width={still ? stillSize.w : FRAME_W}
+          height={still ? stillSize.h : FRAME_H}
           className="cam-canvas"
-          onClick={onTapFace}
+          onClick={onTapTop}
         />
         {!running && !still && (
           <div className="cam-cover">

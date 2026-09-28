@@ -66,13 +66,7 @@ await page.waitForTimeout(1200)
 
 // The app now opens on the camera screen, so step to the manual screen first;
 // that is also the screen the 3D cube lives on.
-const manual = await page.$('text=수동으로 입력')
-if (!manual) {
-  console.error('FAIL: no way to reach the manual screen')
-  process.exit(1)
-}
-await manual.click()
-await page.waitForTimeout(600)
+// the app opens on the manual screen now, so nothing to click first
 
 const canvas = await page.evaluate(() => {
   const c = document.querySelector('canvas:not(.cam-canvas)')

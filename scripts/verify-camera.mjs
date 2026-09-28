@@ -75,6 +75,14 @@ await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' })
 
 // The camera button must be reachable, which is the thing a user complained
 // was missing.
+// reach the camera screen from the manual screen
+const toCam = await page.$('text=카메라로 읽기')
+if (!toCam) {
+  console.error('FAIL: no way to reach the camera screen')
+  process.exit(1)
+}
+await toCam.click()
+await page.waitForTimeout(500)
 const camButton = await page.$('text=실시간 카메라')
 if (!camButton) {
   console.error('FAIL: no way to start the camera from the first screen')
