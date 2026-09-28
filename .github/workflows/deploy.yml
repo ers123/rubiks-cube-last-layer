@@ -29,6 +29,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm test:3d
+        env:
+          # software WebGL so the 3D view can be exercised headlessly
+          PLAYWRIGHT_CHROMIUM_ARGS: --use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader
 
   deploy:
     needs: test
