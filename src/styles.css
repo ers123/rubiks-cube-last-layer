@@ -148,3 +148,5 @@ button.ghost {
 .mininet-label { color: var(--muted); font-size: 11px; width: 14px; }
 .mini { width: 22px; height: 22px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.4); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.as-label { display: inline-block; text-align: center; }
+.cam-stage canvas { cursor: crosshair; }

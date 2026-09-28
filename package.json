@@ -12,7 +12,8 @@
     "verify": "pnpm test && pnpm build && pnpm test:3d",
     "test:watch": "vitest",
     "fake-camera": "node scripts/fake-camera-entry.mjs && node scripts/make-fake-camera.mjs",
-    "test:camera": "pnpm fake-camera && node scripts/verify-camera.mjs"
+    "test:camera": "pnpm fake-camera && node scripts/verify-camera.mjs",
+    "test:photo": "node scripts/verify-photo.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

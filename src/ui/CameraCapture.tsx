@@ -55,6 +55,8 @@ export function CameraCapture({ onDone, onCancel }: Props) {
   const topChosen = useRef<string | null>(null)
   const [progress, setProgress] = useState({ u: 0, sides: 0 })
   const [notice, setNotice] = useState<string | null>(null)
+  const [still, setStill] = useState<HTMLImageElement | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const collected = useRef<Collected>(emptyCollected())
   const cal = useRef<Calibration>(emptyCalibration())
@@ -65,6 +67,8 @@ export function CameraCapture({ onDone, onCancel }: Props) {
 
   /** Latest frame's blobs, kept in a ref so the tap handler can use them. */
   const facesRef = useRef<FaceCandidate[]>([])
+  const stillRef = useRef<HTMLImageElement | null>(null)
+  const stillSizeRef = useRef({ w: FRAME_W, h: FRAME_H })
 
   const stop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -97,6 +101,7 @@ export function CameraCapture({ onDone, onCancel }: Props) {
   }, [])
 
   useEffect(() => stop, [stop])
+
 
   /**
    * Fold one frame into the collected state, before anything is named.
@@ -136,9 +141,87 @@ export function CameraCapture({ onDone, onCancel }: Props) {
     sides: Object.values(collected.current.sides).reduce((n, r) => n + (r?.filter(Boolean).length ?? 0), 0),
   })
 
+  /**
+   * Read a photo the user took.
+   *
+   * A still image is a far better input than a video frame: it is the full
+   * resolution of the phone camera rather than a 480x360 grab, the cube is not
+   * moving, and if a shot goes wrong the fix is to take another one rather than
+   * to watch a live view fail. The detector takes pixels, so it does not care
+   * where they came from.
+   */
+  const onPhoto = useCallback((file: File) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      // cap the long edge: the detector works on a coarse grid anyway, and a
+      // full 3000px phone photo would only cost memory
+      const MAXW = 1400
+      const scale = Math.min(1, MAXW / img.naturalWidth)
+      const W = Math.round(img.naturalWidth * scale)
+      const H = Math.round(img.naturalHeight * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = W
+      canvas.height = H
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      if (!ctx) return
+      ctx.drawImage(img, 0, 0, W, H)
+      const data = ctx.getImageData(0, 0, W, H)
+      const rgb = { width: W, height: H, data: data.data }
+      const faces = findFaces(rgb)
+      facesRef.current = faces
+      setHits(faces)
+      stillSizeRef.current = { w: W, h: H }
+      setStill(img)
+      stillRef.current = img
+      setRunning(false)
+      stop()
+      setNeedTop(faces.length > 0)
+      needTopRef.current = faces.length > 0
+      topGuess.current = faces[0] ?? null
+      setNeedFront(false)
+      ingest(faces)
+      setNotice(
+        faces.length === 0
+          ? '큐브를 찾지 못했어요. 3개 면이 잘 보이게 다시 찍어주세요.'
+          : faces.length < 2
+            ? '면이 하나만 보여요. 3개 면이 보이게 다시 찍어주세요.'
+            : null
+      )
+      URL.revokeObjectURL(url)
+    }
+    img.src = url
+  }, [ingest, stop])
+
+  const onPick = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0]
+      if (f) onPhoto(f)
+      e.target.value = ''
+    },
+    [onPhoto]
+  )
+
+
   const loop = useCallback(() => {
-    const v = videoRef.current
     const canvas = canvasRef.current
+    if (!canvas) {
+      rafRef.current = requestAnimationFrame(loop)
+      return
+    }
+    if (stillRef.current) {
+      // a still photo needs no polling: draw it once with the current overlay
+      const ctx = canvas.getContext('2d')
+      const img = stillRef.current
+      if (ctx) {
+        const cw = stillRef.current ? stillSizeRef.current.w : FRAME_W
+        const ch = stillRef.current ? stillSizeRef.current.h : FRAME_H
+        ctx.drawImage(img, 0, 0, cw, ch)
+        drawOverlay(ctx, hitsRef.current, faceOfBlob.current)
+      }
+      return
+    }
+    const v = videoRef.current
     if (!v || !canvas) {
       rafRef.current = requestAnimationFrame(loop)
       return
@@ -164,9 +247,9 @@ export function CameraCapture({ onDone, onCancel }: Props) {
   const hitsRef = useRef<FaceCandidate[]>([])
 
   useEffect(() => {
-    if (!running) return
+    if (!running && !still) return
     rafRef.current = requestAnimationFrame(loop)
-  }, [running, loop])
+  }, [running, still, loop])
 
   /**
    * Two taps: the top face first, then the face held towards the camera.
@@ -181,8 +264,8 @@ export function CameraCapture({ onDone, onCancel }: Props) {
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
-    const x = ((e.clientX - rect.left) / rect.width) * FRAME_W
-    const y = ((e.clientY - rect.top) / rect.height) * FRAME_H
+    const x = ((e.clientX - rect.left) / rect.width) * canvas.width
+    const y = ((e.clientY - rect.top) / rect.height) * canvas.height
     const hit = hitsRef.current.find((h) => pointInQuad({ x, y }, h.quad))
     if (!hit) return
 
@@ -300,15 +383,26 @@ export function CameraCapture({ onDone, onCancel }: Props) {
           className="cam-canvas"
           onClick={onTapFace}
         />
-        {!running && (
+        {!running && !still && (
           <div className="cam-cover">
             <p>
-              큐브를 비스듬히 들고 <b>3개 면</b>이 보이게 하세요.
+              큐브를 비스듬히 들고 <b>3개 면</b>이 보이게 찍어주세요.
               <br />
               정면으로 들면 맨 위 층이 가늘게 보여 읽지 못합니다.
             </p>
-            <button type="button" className="primary" onClick={start}>
-              카메라 켜기
+            <label className="primary as-label">
+              사진 찍기 / 선택
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={onPick}
+                hidden
+              />
+            </label>
+            <button type="button" className="ghost" onClick={start}>
+              실시간 카메라
             </button>
           </div>
         )}
@@ -331,9 +425,16 @@ export function CameraCapture({ onDone, onCancel }: Props) {
         >
           이 상태로 풀기
         </button>
-        <button type="button" className="ghost" onClick={stop}>
-          끄기
-        </button>
+        {still ? (
+          <label className="ghost as-label">
+            다시 찍기
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} hidden />
+          </label>
+        ) : (
+          <button type="button" className="ghost" onClick={stop}>
+            끄기
+          </button>
+        )}
         <button type="button" className="ghost" onClick={onCancel}>
           수동으로 입력
         </button>
