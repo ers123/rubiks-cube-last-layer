@@ -1,0 +1,3 @@
+[2026-09-28T05:01:39.315Z] GET http://localhost:4173/ → 200 (9ms, 835B)
+[2026-09-28T05:01:39.330Z] GET http://localhost:4173/assets/index-CqbKuDBV.js → 200 (15ms, 622748B)
+[2026-09-28T05:01:39.330Z] GET http://localhost:4173/assets/index-DB5-3VAV.css → 200 (4ms, 3327B)

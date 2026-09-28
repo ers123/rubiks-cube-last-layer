@@ -1,0 +1,15 @@
+{
+  "name": "큐브 라스트 — 마지막 층 가이드",
+  "short_name": "큐브 라스트",
+  "description": "카메라로 마지막 층 상태를 보여주면 외울 알고리즘 최소로 풀어줍니다.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0f14",
+  "theme_color": "#0d0f14",
+  "lang": "ko",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

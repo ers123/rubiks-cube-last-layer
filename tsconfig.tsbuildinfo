@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/ux.test.ts","./src/vite-env.d.ts","./src/cube/model.test.ts","./src/cube/model.ts","./src/cube/solver.test.ts","./src/cube/solver.ts","./src/render/cubeview.tsx","./src/ui/stickerinput.tsx","./vite.config.ts"],"version":"5.9.3"}
