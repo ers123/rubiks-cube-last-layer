@@ -3,6 +3,7 @@ import { detectVisibleFaces, DEFAULT_DETECT, type FaceHit } from '../camera/dete
 import { classifyTopSticker, classifySideStickers, type Palette, type Rgb } from '../camera/classify'
 import {
   grabFrame,
+  drawFrameToCanvas,
   labelFrame,
   assignFaces,
   emptyCalibration,
@@ -162,13 +163,13 @@ export function CameraCapture({ onDone, onCancel }: Props) {
       rafRef.current = requestAnimationFrame(loop)
       return
     }
+    const ctx = canvas.getContext('2d')
+    const drew = ctx ? drawFrameToCanvas(v, ctx, FRAME_W, FRAME_H) : false
+    // The overlay goes on top of the frame that was just drawn, so it must not
+    // clear the canvas: doing that wiped the video and left a black screen.
+    if (ctx && drew) drawOverlay(ctx, hitsRef.current, faceOfBlob.current)
     const img = grabFrame(v, FRAME_W, FRAME_H)
     if (img) {
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.drawImage(v, 0, 0, FRAME_W, FRAME_H)
-        drawOverlay(ctx, FRAME_W, FRAME_H, hitsRef.current, faceOfBlob.current)
-      }
       const palette = bootstrapPalette()
       const res = detectVisibleFaces(img, palette, DEFAULT_DETECT)
       hitsRef.current = res.hits
@@ -377,12 +378,9 @@ function pointInQuad(p: { x: number; y: number }, q: { x: number; y: number }[])
 
 function drawOverlay(
   ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
   hits: FaceHit[],
   labelMap: Record<string, Color>
 ) {
-  ctx.clearRect(0, 0, w, h)
   for (const hit of hits) {
     const named = labelMap[hit.face]
     ctx.strokeStyle = named ? '#5b8cff' : '#ffd166'

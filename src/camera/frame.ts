@@ -117,7 +117,42 @@ export function calibrationReady(cal: Calibration): boolean {
   return (['U', 'R', 'F', 'L', 'B'] as Color[]).every((c) => !!cal.centers[c])
 }
 
-/** Read a frame out of a video element onto an offscreen canvas. */
+/**
+ * The crop rectangle that turns the camera frame into our working aspect ratio.
+ *
+ * Both the on-screen drawing and the detector have to use the same crop, or the
+ * overlay ends up drawn on top of the wrong part of the video and the user is
+ * asked to tap the wrong thing. This is the single source of truth for it.
+ */
+export function coverSourceRect(
+  video: HTMLVideoElement,
+  width: number,
+  height: number
+): { sx: number; sy: number; sw: number; sh: number } {
+  const vr = video.videoWidth / Math.max(1, video.videoHeight)
+  const tr = width / height
+  if (vr > tr) {
+    const sw = video.videoHeight * tr
+    return { sx: (video.videoWidth - sw) / 2, sy: 0, sw, sh: video.videoHeight }
+  }
+  const sh = video.videoWidth / tr
+  return { sx: 0, sy: (video.videoHeight - sh) / 2, sw: video.videoWidth, sh }
+}
+
+/** Draw the camera frame into a canvas, cropped to match the detector. */
+export function drawFrameToCanvas(
+  video: HTMLVideoElement,
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): boolean {
+  if (video.readyState < 2 || video.videoWidth === 0) return false
+  const { sx, sy, sw, sh } = coverSourceRect(video, width, height)
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height)
+  return true
+}
+
+/** Read a frame out of a video element for the detector. */
 export function grabFrame(video: HTMLVideoElement, width = 480, height = 360): RGBImage | null {
   if (video.readyState < 2 || video.videoWidth === 0) return null
   const c = document.createElement('canvas')
@@ -125,21 +160,7 @@ export function grabFrame(video: HTMLVideoElement, width = 480, height = 360): R
   c.height = height
   const ctx = c.getContext('2d', { willReadFrequently: true })
   if (!ctx) return null
-  // cover-fit so the whole frame is filled, matching what the user sees
-  const vr = video.videoWidth / video.videoHeight
-  const tr = width / height
-  let sw = video.videoWidth
-  let sh = video.videoHeight
-  let sx = 0
-  let sy = 0
-  if (vr > tr) {
-    sw = video.videoHeight * tr
-    sx = (video.videoWidth - sw) / 2
-  } else {
-    sh = video.videoWidth / tr
-    sy = (video.videoHeight - sh) / 2
-  }
-  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height)
+  if (!drawFrameToCanvas(video, ctx, width, height)) return null
   const d = ctx.getImageData(0, 0, width, height)
   return { width, height, data: d.data }
 }
