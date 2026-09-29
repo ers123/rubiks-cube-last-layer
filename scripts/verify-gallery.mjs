@@ -55,13 +55,24 @@ console.log('PASS: every picture has all nine top stickers drawn')
 for (const index of [0, 17, 40, 71]) {
   await page.locator('.case').nth(index).click()
   await page.waitForSelector('.steps, .verdict', { timeout: 10000 })
+  // every step must say what it is for, not only what to press
+  const whys = await page.locator('.steps .why-what').allTextContents()
+  const knows = await page.locator('.steps .why-know').allTextContents()
+  if (whys.length === 0) {
+    console.error(`FAIL: case ${index} gave moves with no explanation`)
+    process.exit(1)
+  }
+  if (whys.length !== knows.length) {
+    console.error('FAIL: some steps explain what but not how to tell')
+    process.exit(1)
+  }
   const verdict = await page.locator('.verdict').textContent().catch(() => null)
   const steps = await page.locator('.steps .step, .steps > *').count()
   if (!verdict) {
     console.error(`FAIL: case ${index} showed no verdict`)
     process.exit(1)
   }
-  console.log(`  case ${index + 1}: ${verdict.trim().slice(0, 40)} / ${steps} step rows`)
+  console.log(`  case ${index + 1}: ${verdict.trim().slice(0, 34)} / ${steps} rows / why: ${whys[0].trim().slice(0, 44)}...`)
   const back = page.locator('button', { hasText: '다른 그림 고르기' }).first()
   if ((await back.count()) === 0) {
     console.error('FAIL: no way back to the gallery')

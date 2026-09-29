@@ -3,6 +3,7 @@ import { CubeView, type CubeViewHandle } from './render/CubeView'
 import { StickerInput } from './ui/StickerInput'
 import { CameraCapture } from './ui/CameraCapture'
 import { CaseGallery } from './ui/CaseGallery'
+import { whyOf } from './cube/why'
 import { netToCube, type CaseNet } from './cube/cases'
 import { createSolvedCube, applyMove, applySequence, parseMoves, type Cube, type Move } from './cube/model'
 import { solveLastLayer, type Solution } from './cube/solver'
@@ -164,15 +165,20 @@ export default function App() {
 
           {solution.steps.length > 0 && (
             <ol className="steps">
-              {solution.steps.map((s, i) => (
-                <li key={`${s.seq}-${i}`} className={i === stepIndex ? 'cur' : ''}>
-                  <button type="button" onClick={() => playStep(i)}>
-                    <span className="idx">{i + 1}</span>
-                    <span className="lbl">{s.label}</span>
-                    <code>{s.seq}</code>
-                  </button>
-                </li>
-              ))}
+              {solution.steps.map((s, i) => {
+                const why = whyOf(s.baseLabel)
+                return (
+                  <li key={`${s.seq}-${i}`} className={i === stepIndex ? 'cur' : ''}>
+                    <button type="button" onClick={() => playStep(i)}>
+                      <span className="idx">{i + 1}</span>
+                      <span className="lbl">{s.label}</span>
+                      <code>{s.seq}</code>
+                    </button>
+                    <p className="why-what">{why.what}</p>
+                    <p className="why-know">확인법 · {why.howToKnow}</p>
+                  </li>
+                )
+              })}
             </ol>
           )}
 
