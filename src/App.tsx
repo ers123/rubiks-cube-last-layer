@@ -3,13 +3,14 @@ import { CubeView, type CubeViewHandle } from './render/CubeView'
 import { StickerInput } from './ui/StickerInput'
 import { CameraCapture } from './ui/CameraCapture'
 import { CaseGallery } from './ui/CaseGallery'
+import { QuestionPicker } from './ui/QuestionPicker'
 import { whyOf } from './cube/why'
 import { observe } from './cube/observe'
 import { netToCube, type CaseNet } from './cube/cases'
 import { createSolvedCube, applyMove, applySequence, parseMoves, type Cube, type Move } from './cube/model'
 import { solveLastLayer, type Solution } from './cube/solver'
 
-type Screen = 'camera' | 'input' | 'gallery' | 'solve'
+type Screen = 'camera' | 'input' | 'gallery' | 'ask' | 'solve'
 
 export default function App() {
   const [cube, setCube] = useState<Cube>(() => createSolvedCube())
@@ -103,11 +104,32 @@ export default function App() {
           {!no3d && <CubeView ref={viewRef} cube={cube} revision={revision} size={260} onUnavailable={() => setNo3d(true)} />}
           {no3d && <p className="sub">3D 미리보기를 쓸 수 없어 2D로 보여드립니다.</p>}
           <StickerInput cube={cube} onChange={handleInput} onReset={handleSolve} />
-          <button type="button" className="primary" onClick={() => setScreen('gallery')}>
-            그림으로 고르기 (추천)
+          <button type="button" className="primary" onClick={() => setScreen('ask')}>
+            질문 3개로 좁히기 (추천)
+          </button>
+          <button type="button" className="ghost" onClick={() => setScreen('gallery')}>
+            그림 72개에서 고르기
           </button>
           <button type="button" className="ghost" onClick={() => setScreen('camera')}>
             카메라로 읽기 (아직 완성 안 됨)
+          </button>
+        </>
+      )}
+
+      {screen === 'ask' && (
+        <>
+          <h2>질문 3개로 좁히기</h2>
+          <QuestionPicker
+            onPick={(c: CaseNet) => {
+              const picked = netToCube(c)
+              setCube(picked)
+              cubeRef.current = picked
+              setRevision((r) => r + 1)
+              showSolution(picked)
+            }}
+          />
+          <button type="button" className="ghost" onClick={() => setScreen('gallery')}>
+            그림 72개에서 고르기
           </button>
         </>
       )}

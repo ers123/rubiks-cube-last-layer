@@ -22,6 +22,12 @@ export type CaseNet = Net & {
   id: string
   label: string
   summary: string
+  /** how many of the four top corners are already home, for narrowing by question */
+  cornersHome: number
+  /** how many of the four side rows are already correct, for narrowing by question */
+  edgesHome: number
+  /** true when the top face is all one colour, which is the question that starts it */
+  topAllWhite: boolean
   solution: Solution
 }
 
@@ -188,6 +194,18 @@ const parity = (p: number[]) => {
   return inv % 2
 }
 
+/** How many top corners sit in their own place, a twisted one counting as wrong. */
+export function countCornersHome(n: Net): number {
+  const row = (f: Color) => n.sideRows[SIDE_FACES.indexOf(f)].colors
+  const spots: [number, Color, number][] = [
+    [0, 'F', 0],
+    [2, 'F', 2],
+    [8, 'B', 2],
+    [6, 'B', 0],
+  ]
+  return spots.filter(([top, face, i]) => n.uFace[top] === row(face)[i]).length
+}
+
 function describe(n: Net): string {
   const correctCorners = [0, 1, 2, 3].filter((i) => {
     const c = n.uFace[[0, 2, 8, 6][i]]
@@ -229,11 +247,15 @@ export function buildCases(): CaseNet[] {
       }
       const solution = solveLastLayer(cube)
       if (solution.failure) continue
+      const shown = netOf(cube)
       cases.push({
-        ...netOf(cube),
+        ...shown,
         id: `${cases.length}`,
         label: `케이스 ${cases.length + 1}`,
-        summary: describe(netOf(cube)),
+        summary: describe(shown),
+        cornersHome: countCornersHome(shown),
+        edgesHome: SIDE_FACES.filter((f, i) => shown.sideRows[i].colors[1] === f).length,
+        topAllWhite: shown.uFace.every((c) => c === 'U'),
         solution,
       })
     }

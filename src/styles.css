@@ -172,3 +172,15 @@ button.ghost {
 .filters { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: 12px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; }
 .chip.on { color: var(--ink); border-color: var(--accent); }
+
+.qp { display: flex; flex-direction: column; gap: 10px; }
+.qp-steps { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.qp-steps li { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: var(--muted); border: 1px solid var(--line); }
+.qp-steps li.on { color: var(--ink); border-color: var(--accent); }
+.qp-steps li.done { color: var(--ink); background: var(--panel); }
+.qp-q { font-size: 15px; font-weight: 600; line-height: 1.5; margin: 4px 0 0; }
+.qp-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.qp-opt { font-size: 13px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: inherit; cursor: pointer; }
+.qp-opt.on { border-color: var(--accent); color: var(--ink); }
+.qp-none { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.qp-foot { display: flex; gap: 6px; }

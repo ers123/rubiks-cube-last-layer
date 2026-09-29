@@ -32,15 +32,54 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
 
 await page.goto('http://localhost:4321/', { waitUntil: 'networkidle' })
 
-await page.click('text=그림으로 고르기')
-await page.waitForSelector('.case', { timeout: 10000 })
-
-const shown = await page.locator('.case').count()
-if (shown !== 72) {
-  console.error(`FAIL: expected 72 cases on screen, got ${shown}`)
+const shown = 72
+await page.click('text=질문 3개로 좁히기')
+await page.waitForSelector('.qp', { timeout: 10000 })
+const answer = async (label) => {
+  await page.locator('.qp-opt', { hasText: label }).first().click()
+  await page.waitForTimeout(260)
+}
+// a real answer set: top all white, no corner home, no row correct (28 cases)
+await answer('네, 전부 흰색')
+await answer('0개')
+await answer('0줄')
+const afterQuestions = await page.locator('.case').count()
+if (afterQuestions === 0) {
+  console.error('FAIL: answering all three questions left nothing to choose from')
   process.exit(1)
 }
-console.log(`PASS: gallery shows all ${shown} cases`)
+if (afterQuestions >= shown) {
+  console.error(`FAIL: three questions did not narrow anything (${afterQuestions} of ${shown})`)
+  process.exit(1)
+}
+if (afterQuestions !== 28) {
+  console.error(`FAIL: expected that answer set to leave 28 cases, got ${afterQuestions}`)
+  process.exit(1)
+}
+console.log(`PASS: three questions cut ${shown} cases down to ${afterQuestions}`)
+// a state with a mixed top face is not in the list, and the app has to say so
+await page.locator('.qp-foot button', { hasText: '처음부터' }).click()
+await page.waitForTimeout(200)
+await answer('아니오, 다른 색이 섞여 있어요')
+await answer('0개')
+await answer('0줄')
+const none = await page.locator('.qp-none').count()
+if (none === 0) {
+  console.error('FAIL: a mixed top face should be reported as not in the list')
+  process.exit(1)
+}
+console.log('PASS: a top face with other colours in it is reported honestly')
+await page.locator('.qp-foot button', { hasText: '처음부터' }).click()
+await page.waitForTimeout(200)
+
+await page.click('text=그림 72개에서 고르기')
+await page.waitForSelector('.case', { timeout: 10000 })
+const inGallery = await page.locator('.case').count()
+if (inGallery !== 72) {
+  console.error(`FAIL: expected 72 cases on screen, got ${inGallery}`)
+  process.exit(1)
+}
+console.log(`PASS: gallery shows all ${inGallery} cases`)
 
 // the shelf filter has to actually narrow the list
 const totals = {}
