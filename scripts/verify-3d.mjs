@@ -64,7 +64,7 @@ page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
 await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(1200)
 
-// The app now opens on the camera screen, so step to the manual screen first;
+// The app opens on the manual screen.
 // that is also the screen the 3D cube lives on.
 // the app opens on the manual screen now, so nothing to click first
 

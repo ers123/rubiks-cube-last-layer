@@ -32,7 +32,7 @@ export const SIDE_LABEL: Record<SideFace, string> = {
 /**
  * The 21 stickers that matter: the 9 on the top face and the 12 side stickers
  * of the last layer. The lower two layers are assumed finished, which is the
- * exact situation this app is for. The camera will fill this same object.
+ * exact situation this app is for.
  *
  * Each entry carries the face it belongs to, so callers group by that instead
  * of by index, which is how the labels got out of sync once already.
