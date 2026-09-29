@@ -143,11 +143,23 @@ if (!played.ok) {
   process.exit(1)
 }
 
-const after = await frameStats('after')
+// Poll instead of sleeping a fixed amount: on a slow software renderer the
+// animation is still in flight when a fixed wait expires, which reads as
+// "nothing moved" even though it did.
+let moved = false
+let after = null
+for (let i = 0; i < 40; i++) {
+  after = await frameStats(`after-${i}`)
+  if (Math.abs(after.bytes - before.bytes) >= 200) {
+    moved = true
+    break
+  }
+  await page.waitForTimeout(250)
+}
 console.log('after:', JSON.stringify(after))
 await page.screenshot({ path: 'screenshots/3d-after-move.png' })
 
-if (Math.abs(after.bytes - before.bytes) < 200) {
+if (!moved) {
   console.error('FAIL: the frame did not change after a turn, so nothing animated')
   process.exit(1)
 }
