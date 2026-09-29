@@ -46,7 +46,12 @@ export function lastLayerSlots(): { slot: Slot; dir: Slot; face: Color; isTop: b
   }
   for (const face of SIDE_ORDER) {
     const dir = SIDE_VEC[face]
-    for (const t of [-1, 0, 1] as const) {
+    // Walking along the right face runs opposite to walking along the other
+    // three, because standing in front of it puts the cube's back on your right.
+    // Without this the two end corners of that row are entered the wrong way
+    // round, which is a different cube than the one being looked at.
+    const along = dir.x === 1 ? ([1, 0, -1] as const) : ([-1, 0, 1] as const)
+    for (const t of along) {
       const slot: Slot = dir.x !== 0 ? { x: dir.x, y: 1, z: t } : { x: t, y: 1, z: dir.z }
       out.push({ slot, dir, face: face as Color, isTop: false })
     }

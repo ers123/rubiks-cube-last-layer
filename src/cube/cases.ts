@@ -55,9 +55,18 @@ const EDGE_SLOTS = [
 ]
 
 const uSlot = (x: number, z: number) => (x + 1) + 3 * 2 + 9 * (z + 1)
+/**
+ * A slot in a side row, in the order the row is drawn.
+ *
+ * The index counts from the left of that face as seen from outside, and the
+ * right face runs the other way round to the rest, so it has to be handled
+ * separately. Reading a row the wrong way round swaps its two end corners, which
+ * describes a different cube than the one being looked at.
+ */
 const sideSlot = (face: Color, i: number) => {
   const v = sideVec(face)
-  const t = i - 1
+  const along = v.x === 1 ? [1, 0, -1] : [-1, 0, 1]
+  const t = along[i]
   return v.x !== 0 ? v.x + 1 + 3 * 2 + 9 * (t + 1) : t + 1 + 3 * 2 + 9 * (v.z + 1)
 }
 
