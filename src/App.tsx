@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { CubeView, type CubeViewHandle } from './render/CubeView'
 import { StickerInput } from './ui/StickerInput'
-import { CameraCapture } from './ui/CameraCapture'
 import { CaseGallery } from './ui/CaseGallery'
 import { QuestionPicker } from './ui/QuestionPicker'
 import { whyOf } from './cube/why'
@@ -10,7 +9,7 @@ import { netToCube, type CaseNet } from './cube/cases'
 import { createSolvedCube, applyMove, applySequence, parseMoves, type Cube, type Move } from './cube/model'
 import { solveLastLayer, type Solution } from './cube/solver'
 
-type Screen = 'camera' | 'input' | 'gallery' | 'ask' | 'solve'
+type Screen = 'input' | 'gallery' | 'ask' | 'solve'
 
 export default function App() {
   const [cube, setCube] = useState<Cube>(() => createSolvedCube())
@@ -87,18 +86,6 @@ export default function App() {
         <p className="sub">마지막 층만, 외울 alg 최소로</p>
       </header>
 
-      {screen === 'camera' && (
-        <CameraCapture
-          onDone={(c) => {
-            handleInput(c)
-            setStepIndex(0)
-            setDone(false)
-            setScreen('solve')
-          }}
-          onCancel={() => setScreen('input')}
-        />
-      )}
-
       {screen === 'input' && (
         <>
           {!no3d && <CubeView ref={viewRef} cube={cube} revision={revision} size={260} onUnavailable={() => setNo3d(true)} />}
@@ -109,9 +96,6 @@ export default function App() {
           </button>
           <button type="button" className="ghost" onClick={() => setScreen('gallery')}>
             그림 72개에서 고르기
-          </button>
-          <button type="button" className="ghost" onClick={() => setScreen('camera')}>
-            카메라로 읽기 (아직 완성 안 됨)
           </button>
         </>
       )}
@@ -225,9 +209,6 @@ export default function App() {
             </button>
             <button type="button" className="ghost" onClick={() => setScreen('gallery')}>
               다른 그림 고르기
-            </button>
-            <button type="button" className="ghost" onClick={() => setScreen('camera')}>
-              카메라로 다시
             </button>
             <button type="button" className="ghost" onClick={() => setScreen('input')}>
               수동 수정
