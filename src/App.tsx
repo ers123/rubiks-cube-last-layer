@@ -4,6 +4,7 @@ import { StickerInput } from './ui/StickerInput'
 import { CameraCapture } from './ui/CameraCapture'
 import { CaseGallery } from './ui/CaseGallery'
 import { whyOf } from './cube/why'
+import { observe } from './cube/observe'
 import { netToCube, type CaseNet } from './cube/cases'
 import { createSolvedCube, applyMove, applySequence, parseMoves, type Cube, type Move } from './cube/model'
 import { solveLastLayer, type Solution } from './cube/solver'
@@ -21,6 +22,7 @@ export default function App() {
   const viewRef = useRef<CubeViewHandle>(null)
   const cubeRef = useRef<Cube>(cube)
   cubeRef.current = cube
+  const watched = useMemo(() => observe(cube), [cube])
 
   const handleInput = useCallback((c: Cube) => {
     setCube(c)
@@ -164,6 +166,8 @@ export default function App() {
           </div>
 
           {solution.steps.length > 0 && (
+            <>
+            <p className="watch">지금 볼 것 · {watched.look}</p>
             <ol className="steps">
               {solution.steps.map((s, i) => {
                 const why = whyOf(s.baseLabel)
@@ -180,6 +184,7 @@ export default function App() {
                 )
               })}
             </ol>
+            </>
           )}
 
           {done && <p className="ok big">마지막 층 완성! 🎉</p>}

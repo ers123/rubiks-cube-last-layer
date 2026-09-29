@@ -42,6 +42,42 @@ if (shown !== 72) {
 }
 console.log(`PASS: gallery shows all ${shown} cases`)
 
+// the shelf filter has to actually narrow the list
+const totals = {}
+const allShelves = await page.locator('.chip').allTextContents()
+for (const label of ['전체', '엣지 이미 맞음', '코너 이미 맞음', '둘 다 섞임']) {
+  const chip = page.locator('.chip', { hasText: label }).first()
+  if ((await chip.count()) === 0) {
+    if (label === '전체') {
+      console.error('FAIL: no 전체 filter')
+      process.exit(1)
+    }
+    continue
+  }
+  await chip.click()
+  await page.waitForTimeout(120)
+  const n = await page.locator('.case').count()
+  const text = (await chip.textContent()) ?? ''
+  const count = Number((text.match(/\d+/) || ['0'])[0])
+  if (!Number.isFinite(count) || count === 0) {
+    console.error(`FAIL: filter ${label} shows no count: ${text}`)
+    process.exit(1)
+  }
+  if (n !== count) {
+    console.error(`FAIL: filter ${label} claims ${count} but shows ${n}`)
+    process.exit(1)
+  }
+  totals[label] = n
+}
+const claimed = Object.entries(totals).filter(([k]) => k !== '전체').reduce((a, [, v]) => a + v, 0)
+if (claimed !== totals['전체']) {
+  console.error(`FAIL: shelves hold ${claimed} but 전체 says ${totals['전체']}`)
+  process.exit(1)
+}
+console.log(`PASS: shelves partition all cases ${JSON.stringify(totals)}; shown as ${allShelves.length} chips`)
+await page.locator('.chip', { hasText: '전체' }).first().click()
+await page.waitForTimeout(120)
+
 const empty = await page.locator('.case-u i').evaluateAll((els) =>
   els.filter((e) => !e.style.background || e.style.background === 'transparent').length
 )
@@ -67,12 +103,17 @@ for (const index of [0, 17, 40, 71]) {
     process.exit(1)
   }
   const verdict = await page.locator('.verdict').textContent().catch(() => null)
+  const watch = await page.locator('.watch').textContent().catch(() => null)
+  if (!watch || !/지금 볼 것/.test(watch)) {
+    console.error(`FAIL: case ${index} did not say what to look at`)
+    process.exit(1)
+  }
   const steps = await page.locator('.steps .step, .steps > *').count()
   if (!verdict) {
     console.error(`FAIL: case ${index} showed no verdict`)
     process.exit(1)
   }
-  console.log(`  case ${index + 1}: ${verdict.trim().slice(0, 34)} / ${steps} rows / why: ${whys[0].trim().slice(0, 44)}...`)
+  console.log(`  case ${index + 1}: ${verdict.trim().slice(0, 26)} | ${watch.trim().slice(7, 52)}`)
   const back = page.locator('button', { hasText: '다른 그림 고르기' }).first()
   if ((await back.count()) === 0) {
     console.error('FAIL: no way back to the gallery')
