@@ -6,6 +6,7 @@ import {
   FACE_COLORS,
   type Color,
   type Cube,
+  type Vec3,
   type Move,
   type Slot,
 } from '../cube/model'
@@ -42,7 +43,7 @@ export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
   const groupsRef = useRef<THREE.Group[]>([])
-  const meshesRef = useRef<{ slot: number; mesh: THREE.Mesh; base: THREE.Color }[]>([])
+  const meshesRef = useRef<{ slot: number; dir: Vec3; mesh: THREE.Mesh; base: THREE.Color }[]>([])
   const stateRef = useRef<{ cube: Cube; busy: boolean }>({ cube, busy: false })
   const highlightRef = useRef<THREE.Mesh[]>([])
   const rafRef = useRef<number>()
@@ -111,7 +112,7 @@ export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
         m.lookAt(m.position.clone().add(new THREE.Vector3(d.x, d.y, d.z)))
         m.userData.baseColor = new THREE.Color('#dddddd')
         groupsRef.current[i].add(m)
-        meshesRef.current.push({ slot: i, mesh: m, base: new THREE.Color('#dddddd') })
+        meshesRef.current.push({ slot: i, dir: d, mesh: m, base: new THREE.Color('#dddddd') })
       }
     }
 
@@ -138,24 +139,24 @@ export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
   }, [size])
 
   // --- sync visuals from the logical cube ---
+  /**
+   * Paint each sticker mesh from the cubie sticker that faces the same way.
+   *
+   * The earlier version indexed meshes by direction through a map built from
+   * `c[i]`, which put every direction of a corner onto one mesh and then coloured
+   * only that one. Two of every three stickers kept a stale colour, so a solved
+   * face would show whatever was on screen before. Reading the direction off the
+   * mesh record itself is the only way each one can be set to its own colour.
+   */
   const sync = (c: Cube) => {
-    const byDir = new Map<string, THREE.Mesh>()
     for (const rec of meshesRef.current) {
-      const i = rec.slot
-      const s = slotFromIndex(i)
-      for (const st of c[i]) {
-        byDir.set(`${s.x},${s.y},${s.z}|${st.dir.x}${st.dir.y}${st.dir.z}`, rec.mesh)
-      }
-    }
-    for (const rec of meshesRef.current) {
-      const i = rec.slot
-      const s = slotFromIndex(i)
-      const st = c[i][0]
-      const m = byDir.get(`${s.x},${s.y},${s.z}|${st.dir.x}${st.dir.y}${st.dir.z}`)
-      if (m) {
-        const mat = m.material as THREE.MeshStandardMaterial
-        mat.color.set(FACE_COLORS[st.color as Color])
-      }
+      const st = c[rec.slot].find(
+        (s) => s.dir.x === rec.dir.x && s.dir.y === rec.dir.y && s.dir.z === rec.dir.z
+      )
+      if (!st) continue
+      const mat = rec.mesh.material as THREE.MeshStandardMaterial
+      mat.color.set(FACE_COLORS[st.color as Color])
+      rec.mesh.userData.baseColor = mat.color.clone()
     }
   }
 

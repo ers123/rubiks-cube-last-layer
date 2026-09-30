@@ -31,6 +31,7 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm test:3d
+      - run: node scripts/verify-paint.mjs
         env:
           # software WebGL so the 3D view can be exercised headlessly
           PLAYWRIGHT_CHROMIUM_ARGS: --use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader
