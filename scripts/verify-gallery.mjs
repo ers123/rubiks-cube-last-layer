@@ -62,16 +62,41 @@ await page.locator('.qp-foot button', { hasText: '처음부터' }).click()
 await page.waitForTimeout(200)
 await answer('아니오, 다른 색이 섞여 있어요')
 await answer('0개')
-await answer('0줄')
-const none = await page.locator('.qp-none').count()
-if (none === 0) {
-  console.error('FAIL: a mixed top face should be reported as not in the list')
+// the corner stage never asks about the side rows: they are all correct there
+// A top face with other colours in it is the corner stage, which has its own
+// cases now, so it must narrow to something rather than giving up.
+const ollCases = await page.locator('.case').count()
+if (ollCases === 0) {
+  console.error('FAIL: the corner stage found nothing to offer')
   process.exit(1)
 }
-console.log('PASS: a top face with other colours in it is reported honestly')
-await page.locator('.qp-foot button', { hasText: '처음부터' }).click()
-await page.waitForTimeout(200)
+console.log(`PASS: a top face with other colours in it narrows to ${ollCases} corner-stage cases`)
 
+// and picking one of them has to produce a solution that finishes the cube
+await page.locator('.case').first().click()
+await page.waitForSelector('.steps, .verdict', { timeout: 10000 })
+const ollWatch = await page.locator('.watch').textContent()
+const ollWhy = await page.locator('.steps .why-what').first().textContent()
+if (!/지금 볼 것/.test(ollWatch ?? '') || !ollWhy) {
+  console.error('FAIL: a corner-stage case gave no guidance')
+  process.exit(1)
+}
+console.log(`  corner stage: ${ollWatch.trim().slice(7, 46)}`)
+const back2 = page.locator('button', { hasText: '다른 그림 고르기' }).first()
+if ((await back2.count()) === 0) {
+  console.error('FAIL: no way back from a corner-stage solution')
+  process.exit(1)
+}
+await back2.click()
+await page.waitForTimeout(250)
+// that lands on the gallery screen; step back to the questions to get home
+const toManual = page.locator('button', { hasText: '직접 입력하러 가기' }).first()
+if ((await toManual.count()) === 0) {
+  console.error('FAIL: no way from the gallery back to the manual screen')
+  process.exit(1)
+}
+await toManual.click()
+await page.waitForTimeout(250)
 await page.click('text=그림 72개에서 고르기')
 await page.waitForSelector('.case', { timeout: 10000 })
 const inGallery = await page.locator('.case').count()

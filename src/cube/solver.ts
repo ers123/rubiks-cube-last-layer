@@ -236,7 +236,7 @@ function bfs(
  * are twisted and whether the edges are flipped. Nothing about the last layer
  * is left out, so two states share a key only if they are genuinely identical.
  */
-function stateKey(cube: Cube): string {
+export function stateKey(cube: Cube): string {
   const { corners, edges } = homesOf(cube)
   const twist = U_CORNERS.map((s) => (colorAt(cube, s, U_DIR) === 'U' ? '0' : '1')).join('')
   const flip = U_EDGES.map((s) => (colorAt(cube, s, U_DIR) === 'U' ? '0' : '1')).join('')
@@ -245,7 +245,7 @@ function stateKey(cube: Cube): string {
 
 // --- labelling ----------------------------------------------------------
 
-function caseNameOf(cube: Cube): string {
+export function caseNameOf(cube: Cube): string {
   if (isLastLayerSolved(cube)) return '이미 완성'
   const oriented = areCornersOriented(cube)
   const { corners, edges } = homesOf(cube)

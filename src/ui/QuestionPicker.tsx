@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { buildCases, type CaseNet } from '../cube/cases'
+import { buildCornerCases } from '../cube/cornerCases'
 import { FACE_COLORS, type Color } from '../cube/model'
 
 /**
@@ -40,24 +41,32 @@ type Answers = { topAllWhite: boolean | null; cornersHome: number | null; edgesH
 
 export function QuestionPicker({ onPick }: { onPick: (c: CaseNet) => void }) {
   const cases = useMemo(() => buildCases(), [])
+  const corners = useMemo(() => buildCornerCases(), [])
   const [a, setA] = useState<Answers>({ topAllWhite: null, cornersHome: null, edgesHome: null })
   const [step, setStep] = useState(0)
   const [skipped, setSkipped] = useState(false)
 
-  const current = ANSWERS[step]
-  const value = a[current.key]
+  // The first answer decides which stage is in front of the reader. A top face
+  // that is not all one colour means the corners are still twisted, which is a
+  // completely different and much larger set of cases.
+  const pool = a.topAllWhite === false ? corners : cases
+
+  // Once the top edges are home the side rows are all correct by definition, so
+  // asking how many are right has an answer that is always the same. Asking it
+  // would only ever narrow the list to nothing.
+  const asked = a.topAllWhite === false ? ANSWERS.slice(0, 2) : ANSWERS
+  const effective = a.topAllWhite === false ? { ...a, edgesHome: a.edgesHome ?? 4 } : a
+  const current = step < asked.length ? asked[step] : null
+  const value = current ? a[current.key] : null
 
   const matches = useMemo(() => {
-    if (a.topAllWhite === null || a.cornersHome === null || a.edgesHome === null) return []
-    return cases.filter(
-      (c) =>
-        c.topAllWhite === a.topAllWhite &&
-        c.cornersHome === a.cornersHome &&
-        c.edgesHome === a.edgesHome
+    if (effective.topAllWhite === null || effective.cornersHome === null || effective.edgesHome === null) return []
+    return pool.filter(
+      (c) => c.cornersHome === effective.cornersHome && c.edgesHome === effective.edgesHome
     )
-  }, [cases, a])
+  }, [pool, effective.topAllWhite, effective.cornersHome, effective.edgesHome])
 
-  const answered = a.topAllWhite !== null && a.cornersHome !== null && a.edgesHome !== null
+  const answered = effective.topAllWhite !== null && effective.cornersHome !== null && effective.edgesHome !== null
   const reshuffle = () => {
     setA({ topAllWhite: null, cornersHome: null, edgesHome: null })
     setStep(0)
@@ -67,13 +76,15 @@ export function QuestionPicker({ onPick }: { onPick: (c: CaseNet) => void }) {
   return (
     <div className="qp">
       <ol className="qp-steps">
-        {ANSWERS.map((s, i) => (
+        {asked.map((s, i) => (
           <li key={s.key} className={i === step ? 'on' : a[s.key] !== null ? 'done' : ''}>
             {i + 1}
           </li>
         ))}
       </ol>
 
+      {current && (
+        <>
       <p className="qp-q">{current.q}</p>
       <p className="sub">{current.hint}</p>
 
@@ -86,17 +97,22 @@ export function QuestionPicker({ onPick }: { onPick: (c: CaseNet) => void }) {
             onClick={() => {
               setA({ ...a, [current.key]: o.v })
               setSkipped(false)
-              if (step < ANSWERS.length - 1) setTimeout(() => setStep(step + 1), 180)
+              if (step < asked.length - 1) setTimeout(() => setStep(step + 1), 180)
             }}
           >
             {o.label}
           </button>
         ))}
       </div>
+        </>
+      )}
 
       {answered && matches.length > 0 && (
         <>
-          <p className="sub">이 답으로는 {matches.length}가지가 남아요. 님 큐브와 같은 그림을 고르세요.</p>
+          <p className="sub">
+            이 답으로는 {matches.length}가지가 남아요
+            {pool.length > 100 ? ` (모서리 단계 ${pool.length}가지 중에서)` : ''}. 님 큐브와 같은 그림을 고르세요.
+          </p>
           <div className="gallery-grid">
             {matches.map((c) => (
               <button key={c.id} type="button" className="case" onClick={() => onPick(c)}>
@@ -125,8 +141,8 @@ export function QuestionPicker({ onPick }: { onPick: (c: CaseNet) => void }) {
       {answered && matches.length === 0 && !skipped && (
         <div className="qp-none">
           <p>
-            <strong>이 답과 맞는 경우가 목록에 없어요.</strong> 윗면이 전부 흰색이 아니라면 코너가 뒤집힌
-            상태라, 이 목록(72가지)으로는 답을 정할 수 없습니다.
+            <strong>이 답과 맞는 경우가 목록에 없어요.</strong> 님이 센 개수가 실제 큐브와 다를 수 있습니다.
+            앞에서부터 다시 확인해 보세요.
           </p>
           <button type="button" className="primary" onClick={() => setSkipped(true)}>
             그래도 계속할게요
@@ -137,10 +153,10 @@ export function QuestionPicker({ onPick }: { onPick: (c: CaseNet) => void }) {
       {answered && matches.length === 0 && skipped && (
         <div className="qp-none">
           <p>
-            대신 그림 72개를 전부 보여드릴게요. 다른 색이 섞인 윗면이라면, 맞는 그림이 목록에 없을 수 있습니다.
+            대신 이 단계의 그림을 전부 보여드릴게요.
           </p>
-          <button type="button" className="primary" onClick={() => onPick(cases[0])}>
-            그림 72개 보기
+          <button type="button" className="primary" onClick={() => onPick(pool[0])}>
+            이 단계의 그림 {pool.length}개 보기
           </button>
         </div>
       )}
