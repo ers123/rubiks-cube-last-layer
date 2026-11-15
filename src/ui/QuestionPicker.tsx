@@ -13,10 +13,11 @@ const counts = [0, 1, 2, 3, 4]
 
 type Answer = 'uniform' | 'mixed' | 'aligned' | 'unsure' | number
 
-export function QuestionPicker({ colors, onPick, onManual }: {
+export function QuestionPicker({ colors, onPick, onManual, onCross }: {
   colors: Record<Color, string>
   onPick: (net: Net) => void
   onManual: () => void
+  onCross: () => void
 }) {
   const [answers, setAnswers] = useState<Answer[]>([])
   const [showAll, setShowAll] = useState(false)
@@ -74,7 +75,10 @@ export function QuestionPicker({ colors, onPick, onManual }: {
         </>
       )}
       {unsupported && (
-        <p className="qp-none">그림으로 고르는 코너 단계는 윗면 십자와 옆면 엣지 네 곳이 맞아야 해요. 현재 상태는 직접 입력으로 확인할 수 있어요.</p>
+        <div className="qp-none">
+          <p>그림으로 고르는 코너 단계는 윗면 십자와 옆면 엣지 네 곳이 맞아야 해요. 십자 안내를 보거나 직접 입력으로 확인할 수 있어요.</p>
+          <button type="button" className="primary" onClick={onCross}>윗면 십자 안내</button>
+        </div>
       )}
       {((uniform && step === 1) || (second === 'aligned' && step === 2)) && (
         <>

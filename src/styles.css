@@ -184,3 +184,14 @@ button.ghost {
 .ghost:disabled, .steps button:disabled { opacity: 0.6; cursor: default; }
 .cross-example { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
 .qp-foot { flex-wrap: wrap; }
+
+.lesson { display: grid; gap: 12px; }
+.lesson h2, .lesson p { margin: 0; }
+.lesson input, .lesson select { padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.lesson select { margin-left: 8px; }
+.lesson-formula { padding: 12px; background: var(--panel); border-radius: 8px; font-size: 1.08rem; }
+.cross-grid { display: grid; grid-template: repeat(3, 46px) / repeat(3, 46px); justify-content: center; gap: 4px; }
+.cross-cell { border: 1px solid var(--muted); background: var(--panel); border-radius: 6px; }
+button.cross-cell { cursor: pointer; }
+button.cross-cell[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--bg); }
+.cross-front { margin: 0; text-align: center; }

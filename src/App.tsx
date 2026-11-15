@@ -3,6 +3,8 @@ import { CubeView, type CubeViewHandle } from './render/CubeView'
 import { StickerInput } from './ui/StickerInput'
 import { CaseGallery } from './ui/CaseGallery'
 import { QuestionPicker } from './ui/QuestionPicker'
+import { CrossGuide } from './ui/CrossGuide'
+import { FormulaPractice } from './ui/FormulaPractice'
 import { CaseDiagram } from './ui/CaseDiagram'
 import { adjacentColors, COLOR_NAMES, cssColors, cubeColors } from './ui/cubeColors'
 import { whyOf } from './cube/why'
@@ -11,7 +13,7 @@ import { netOf, netToCube } from './cube/cases'
 import { createSolvedCube, cloneCube, applyMove, parseMoves, COLOR_FACE_ORDER, type Color, type Cube, type Move } from './cube/model'
 import { isLastLayerSolved, solveLastLayer, type Solution } from './cube/solver'
 
-type Screen = 'input' | 'gallery' | 'ask' | 'solve'
+type Screen = 'input' | 'gallery' | 'ask' | 'solve' | 'cross' | 'practice'
 
 export default function App() {
   const [cube, setCube] = useState<Cube>(() => createSolvedCube())
@@ -19,6 +21,7 @@ export default function App() {
   const [frontColor, setFrontColor] = useState<Color>('F')
   const palette = useMemo(() => cubeColors(topColor, frontColor), [topColor, frontColor])
   const colors = useMemo(() => cssColors(palette), [palette])
+  const [crossFrom, setCrossFrom] = useState<'input' | 'ask'>('input')
   const [screen, setScreen] = useState<Screen>('input')
   const [solution, setSolution] = useState<Solution | null>(null)
   const [completed, setCompleted] = useState(0)
@@ -30,6 +33,11 @@ export default function App() {
   const lastStepStart = useRef<Cube | null>(null)
   const watched = useMemo(() => observe(cube), [cube])
   const done = Boolean(solution?.steps.length && completed === solution.steps.length && isLastLayerSolved(cube))
+
+  function openCross(from: 'input' | 'ask') {
+    setCrossFrom(from)
+    setScreen('cross')
+  }
 
   function showSolution(target: Cube) {
     setCube(target)
@@ -130,6 +138,7 @@ export default function App() {
           </fieldset>
           {!no3d && <CubeView ref={viewRef} cube={cube} colors={colors} size={260} onUnavailable={() => setNo3d(true)} />}
           {no3d && <p className="sub">3D 미리보기를 쓸 수 없어 2D로 보여드립니다.</p>}
+          <button type="button" className="ghost" onClick={() => openCross('input')}>윗면 십자 안내</button>
           <StickerInput cube={cube} palette={palette} colors={colors} onChange={setCube} onSolve={() => showSolution(cube)} />
           <button type="button" className="primary" onClick={() => setScreen('ask')}>
             질문 3개로 좁히기 (추천)
@@ -145,6 +154,7 @@ export default function App() {
           <h2>질문 3개로 좁히기</h2>
           <QuestionPicker
             colors={colors}
+            onCross={() => openCross('ask')}
             onManual={() => setScreen('input')}
             onPick={(c) => showSolution(netToCube(c))}
           />
@@ -152,6 +162,14 @@ export default function App() {
             그림 72개에서 고르기
           </button>
         </>
+      )}
+
+      {screen === 'cross' && (
+        <CrossGuide color={colors.U} onBack={() => setScreen(crossFrom)} onContinue={() => setScreen('ask')} />
+      )}
+
+      {screen === 'practice' && solution && (
+        <FormulaPractice steps={solution.steps} onBack={() => setScreen('solve')} />
       )}
 
       {screen === 'gallery' && (
@@ -212,6 +230,9 @@ export default function App() {
             <>
               <p className="watch">지금 볼 것 · {watched.look}</p>
               {done && !playing && <p className="ok big" role="status">마지막 층 완성! 🎉</p>}
+              {done && !playing && algCount > 0 && (
+                <button type="button" className="primary" onClick={() => setScreen('practice')}>방금 쓴 공식 연습</button>
+              )}
               <div className="actions">
                 <button type="button" className="primary" disabled={playing || completed >= solution.steps.length} onClick={() => void play('next')}>
                   다음 단계

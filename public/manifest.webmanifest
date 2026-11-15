@@ -1,7 +1,7 @@
 {
   "name": "큐브 라스트 — 마지막 층 가이드",
   "short_name": "큐브 라스트",
-  "description": "카메라로 마지막 층 상태를 보여주면 외울 알고리즘 최소로 풀어줍니다.",
+  "description": "3×3 큐브의 마지막 층 풀이, 윗면 십자 안내와 공식 연습을 제공합니다.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -10,6 +10,7 @@
   "theme_color": "#0d0f14",
   "lang": "ko",
   "icons": [
-    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }

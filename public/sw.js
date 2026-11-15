@@ -1,56 +1,42 @@
-/*
- * Network-first service worker.
- *
- * iOS keeps service worker caches stubbornly, which is a real problem for an
- * app whose algorithms change often: users would keep getting the old advice.
- * So the HTML and the JS are always fetched from the network first, and the
- * cache is only a fallback for offline use. When a fetch succeeds we drop any
- * cached copy that has a different body hash, so a reload always picks up new
- * code instead of a stale precache entry.
- */
-const CACHE = 'cube-last-v1'
-const CORE = ['./', './index.html', './manifest.webmanifest', './icon.svg']
+const CACHE = 'cube-last-v2'
+const CORE = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png']
+const entry = new URL('./index.html', self.registration.scope).href
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((c) => c.addAll(CORE))
-      .then(() => self.skipWaiting())
-      .catch(() => self.skipWaiting())
-  )
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE)
+    const html = await fetch(entry, { cache: 'reload' })
+    if (!html.ok) throw new Error('App entry is unavailable')
+    const source = await html.text()
+    const assets = Array.from(source.matchAll(/(?:src|href)="(\.\/assets\/[^"]+)"/g), ([, path]) => path)
+    await cache.addAll([...CORE, ...assets].map((path) => new Request(new URL(path, entry), { cache: 'reload' })))
+    await self.skipWaiting()
+  })())
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  )
-})
-
-self.addEventListener('message', (event) => {
-  if (event.data === 'skip-waiting') self.skipWaiting()
+  event.waitUntil((async () => {
+    const keys = await caches.keys()
+    await Promise.all(keys.filter((key) => key.startsWith('cube-last-') && key !== CACHE).map((key) => caches.delete(key)))
+    await self.clients.claim()
+  })())
 })
 
 self.addEventListener('fetch', (event) => {
   const req = event.request
-  if (req.method !== 'GET') return
-  const url = new URL(req.url)
-  if (url.origin !== self.location.origin) return
+  if (req.method !== 'GET' || !req.url.startsWith(self.registration.scope)) return
 
-  event.respondWith(
-    fetch(req)
-      .then((res) => {
-        if (res && res.ok) {
-          const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put(req, copy))
-        }
-        return res
-      })
-      .catch(() =>
-        caches.match(req).then((hit) => hit || caches.match('./index.html'))
-      )
-  )
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE)
+    try {
+      const response = await fetch(req)
+      if (response.ok) await cache.put(req, response.clone()).catch(() => {})
+      return response
+    } catch {
+      const cached = await cache.match(req, { ignoreVary: true })
+      if (cached) return cached
+      if (req.mode === 'navigate') return await cache.match(entry) ?? Response.error()
+      return Response.error()
+    }
+  })())
 })
