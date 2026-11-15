@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import type { SolveStep } from '../cube/solver'
+import { recordAnswer } from './reviewQueue'
 
-function FormulaQuestion({ name, seq }: { name: string; seq: string }) {
+export function FormulaQuestion({ name, seq }: { name: string; seq: string }) {
+  const [notice, setNotice] = useState('')
   const [answer, setAnswer] = useState('')
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | 'revealed' | null>(null)
   const moves = seq.split(' ')
@@ -12,7 +14,9 @@ function FormulaQuestion({ name, seq }: { name: string; seq: string }) {
     <form className="lesson" onSubmit={(event) => {
       event.preventDefault()
       const normalized = answer.trim().toUpperCase().replace(/[′’]/g, "'").replace(/\s+/g, '')
-      setFeedback(normalized === suffix.replace(/ /g, '') ? 'correct' : 'wrong')
+      const correct = normalized === suffix.replace(/ /g, '')
+      setFeedback(correct ? 'correct' : 'wrong')
+      setNotice(recordAnswer(`formula:${name}`, correct))
     }}>
       <p>{name} 공식의 뒷부분을 채워 보세요.</p>
       <code className="lesson-formula">{moves.slice(0, split).join(' ')} <span aria-label="빈칸">___</span></code>
@@ -21,13 +25,13 @@ function FormulaQuestion({ name, seq }: { name: string; seq: string }) {
         onChange={(event) => { setAnswer(event.target.value); setFeedback(null) }} />
       <div className="actions">
         <button type="submit" className="primary" disabled={!answer.trim()}>정답 확인</button>
-        <button type="button" className="ghost" onClick={() => setFeedback('revealed')}>정답 보기</button>
+        <button type="button" className="ghost" onClick={() => { setFeedback('revealed'); setNotice('') }}>정답 보기</button>
       </div>
       {feedback && (
         <p role="status">
           {feedback === 'wrong' ? '아직 달라요. 회전 순서와 방향을 확인해 보세요.' : (
             <>{feedback === 'correct' ? '정답이에요! ' : '전체 공식 '}<code>{seq}</code></>
-          )}
+          )} {notice}
         </p>
       )}
     </form>

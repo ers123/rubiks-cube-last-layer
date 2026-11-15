@@ -4,6 +4,9 @@ import { StickerInput } from './ui/StickerInput'
 import { CaseGallery } from './ui/CaseGallery'
 import { QuestionPicker } from './ui/QuestionPicker'
 import { CrossGuide } from './ui/CrossGuide'
+import { PhotoInput } from './ui/PhotoInput'
+import { GripPractice } from './ui/GripPractice'
+import { dueQuestions } from './ui/reviewQueue'
 import { FormulaPractice } from './ui/FormulaPractice'
 import { CaseDiagram } from './ui/CaseDiagram'
 import { adjacentColors, COLOR_NAMES, cssColors, cubeColors } from './ui/cubeColors'
@@ -11,9 +14,10 @@ import { whyOf } from './cube/why'
 import { observe } from './cube/observe'
 import { netOf, netToCube } from './cube/cases'
 import { createSolvedCube, cloneCube, applyMove, parseMoves, COLOR_FACE_ORDER, type Color, type Cube, type Move } from './cube/model'
+import { lastLayerFormulas, solveCompleteLastLayer } from './cube/completeLastLayer'
 import { isLastLayerSolved, solveLastLayer, type Solution } from './cube/solver'
 
-type Screen = 'input' | 'gallery' | 'ask' | 'solve' | 'cross' | 'practice'
+type Screen = 'input' | 'gallery' | 'ask' | 'solve' | 'cross' | 'practice' | 'grip' | 'review' | 'photo'
 
 export default function App() {
   const [cube, setCube] = useState<Cube>(() => createSolvedCube())
@@ -22,6 +26,7 @@ export default function App() {
   const palette = useMemo(() => cubeColors(topColor, frontColor), [topColor, frontColor])
   const colors = useMemo(() => cssColors(palette), [palette])
   const [crossFrom, setCrossFrom] = useState<'input' | 'ask'>('input')
+  const [fromPhoto, setFromPhoto] = useState(false)
   const [screen, setScreen] = useState<Screen>('input')
   const [solution, setSolution] = useState<Solution | null>(null)
   const [completed, setCompleted] = useState(0)
@@ -39,9 +44,9 @@ export default function App() {
     setScreen('cross')
   }
 
-  function showSolution(target: Cube) {
+  function showSolution(target: Cube, direct = false) {
     setCube(target)
-    setSolution(solveLastLayer(target))
+    setSolution(direct ? solveCompleteLastLayer(target) : solveLastLayer(target))
     setCompleted(0)
     lastStepStart.current = null
     setScreen('solve')
@@ -136,10 +141,16 @@ export default function App() {
             </div>
             <p className="sub">선택한 면을 위와 앞으로 두세요. 오른쪽 중심색은 {COLOR_NAMES[palette.R]}입니다.</p>
           </fieldset>
+          <button type="button" className="primary" onClick={() => setScreen('photo')}>사진으로 마지막 층 읽기</button>
           {!no3d && <CubeView ref={viewRef} cube={cube} colors={colors} size={260} onUnavailable={() => setNo3d(true)} />}
           {no3d && <p className="sub">3D 미리보기를 쓸 수 없어 2D로 보여드립니다.</p>}
           <button type="button" className="ghost" onClick={() => openCross('input')}>윗면 십자 안내</button>
-          <StickerInput cube={cube} palette={palette} colors={colors} onChange={setCube} onSolve={() => showSolution(cube)} />
+          <div className="actions">
+            <button type="button" className="ghost" onClick={() => setScreen('grip')}>큐브 그림 퀴즈</button>
+            <button type="button" className="ghost" onClick={() => setScreen('review')}>오늘의 복습 ({dueQuestions().length})</button>
+          </div>
+          {fromPhoto && <p role="status">사진에서 읽은 색입니다. 실제 큐브와 비교해 수정한 뒤 해답을 보세요.</p>}
+          <StickerInput cube={cube} palette={palette} colors={colors} onChange={setCube} onSolve={() => { setFromPhoto(false); showSolution(cube, true) }} />
           <button type="button" className="primary" onClick={() => setScreen('ask')}>
             질문 3개로 좁히기 (추천)
           </button>
@@ -166,6 +177,18 @@ export default function App() {
 
       {screen === 'cross' && (
         <CrossGuide color={colors.U} onBack={() => setScreen(crossFrom)} onContinue={() => setScreen('ask')} />
+      )}
+
+      {screen === 'photo' && (
+        <PhotoInput palette={palette} onBack={() => setScreen('input')} onRead={(input) => {
+          setCube(input)
+          setFromPhoto(true)
+          setScreen('input')
+        }} />
+      )}
+
+      {(screen === 'grip' || screen === 'review') && (
+        <GripPractice key={screen} colors={colors} palette={palette} review={screen === 'review'} onBack={() => setScreen('input')} />
       )}
 
       {screen === 'practice' && solution && (
@@ -277,26 +300,14 @@ export default function App() {
             </button>
           </div>
 
-          <section className="alghelp">
+          {algCount > 0 && <section className="alghelp">
             <h2>배워야 할 알고리즘</h2>
             <ul>
-              <li>
-                <code>R U R&apos; U R U2 R&apos;</code> <span>Sune — 코너 방향</span>
-              </li>
-              <li>
-                <code>R U2 R&apos; U&apos; R U&apos; R&apos;</code> <span>Anti-Sune</span>
-              </li>
-              <li>
-                <code>U R U&apos; L&apos; U R&apos; U&apos; L</code> <span>Niklas — 코너 자리</span>
-              </li>
-              <li>
-                <code>F2 U L R&apos; F2 L&apos; R U F2</code> <span>Ua — 에지 자리</span>
-              </li>
+              {lastLayerFormulas.filter(({seq}) => solution.steps.some((step) => step.seq === seq)).map(({ name, seq }) => (
+                <li key={seq}><code>{seq}</code> <span>{name}</span></li>
+              ))}
             </ul>
-            <p className="sub">
-              U 돌리기는 외울 게 없습니다. 이 4개면 288가지 PLL 전부를 커버합니다.
-            </p>
-          </section>
+          </section>}
         </>
       )}
     </main>

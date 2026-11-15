@@ -7,6 +7,14 @@ export type Why = {
 }
 
 export const WHY: Record<string, Why> = {
+  윗면십자: {
+    what: '윗면 엣지의 방향을 바꾸는 공식입니다.',
+    howToKnow: '윗면의 가운데 색이 위를 향하는 엣지를 확인하세요.',
+  },
+  tperm: {
+    what: '윗면의 코너 두 개와 엣지 두 개를 서로 바꾸는 공식입니다.',
+    howToKnow: '공식 전후에 위치가 바뀐 조각을 옆면에서 확인하세요.',
+  },
   sune: {
     what: '윗면 코너의 방향을 바꾸는 공식입니다.',
     howToKnow: '윗면 중심색과 다른 코너가 어느 위치에 남았는지 확인하세요.',
@@ -34,6 +42,6 @@ export const SETUP_WHY: Why = {
 const ALIASES: Record<string, string> = { ua: 'uaperm', ub: 'uaperm' }
 
 export function whyOf(baseLabel: string): Why {
-  const key = baseLabel.toLowerCase().replace(/[^a-z]/g, '')
+  const key = baseLabel.toLowerCase().replace(/[^a-z가-힣]/g, '')
   return WHY[ALIASES[key] ?? key] ?? SETUP_WHY
 }
