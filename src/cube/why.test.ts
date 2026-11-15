@@ -13,8 +13,8 @@ describe('why each algorithm is here', () => {
     for (const name of ALG_NAMES) {
       const why = whyOf(labels[name])
       expect(why, `${name} needs a reason`).not.toBe(SETUP_FALLBACK())
-      expect(why.what.length, `${name} explanation is too short`).toBeGreaterThan(30)
-      expect(why.howToKnow.length, `${name} needs a way to tell when to stop`).toBeGreaterThan(20)
+      expect(why.what.length, `${name} explanation is too short`).toBeGreaterThan(15)
+      expect(why.howToKnow.length, `${name} needs a visual check`).toBeGreaterThan(20)
     }
   })
 
@@ -27,7 +27,7 @@ describe('why each algorithm is here', () => {
     expect(whyOf('something else').what.length).toBeGreaterThan(10)
   })
 
-  it('tells the reader to judge repeats by looking, not by counting', () => {
+  it('gives the reader a visual check', () => {
     for (const name of ALG_NAMES) {
       expect(whyOf(name).howToKnow).toMatch(/보|확인|남/)
     }

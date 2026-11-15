@@ -1,18 +1,7 @@
-import { createSolvedCube, applySequence, type Cube, type Color } from './model'
-import { solveLastLayer, isLastLayerSolved, type Solution } from './solver'
+import { colorAt, U_CORNERS, U_DIR, createSolvedCube, applySequence, type Cube, type Color } from './model'
+import { homesOf, solveLastLayer, isLastLayerSolved, type Solution } from './solver'
 
-/**
- * The last layer's cases, enumerated as pictures.
- *
- * Making someone name twenty-one colours, or count stickers one at a time, is a
- * poor interface. Once the bottom two layers are done and the cross is on the
- * face being solved, the top face is a cross of white with the four corners in
- * whatever state they happen to be in. All that is left is a permutation, and
- * the twenty-one permutations can be shown as pictures rather than described in
- * words: the user looks at their own cube, finds the matching picture, taps it,
- * and gets the answer.
- */
-
+/** Last-layer sticker diagrams, with the four side rows viewed from outside. */
 export type Net = {
   uFace: (Color | null)[]
   sideRows: { face: Color; colors: (Color | null)[] }[]
@@ -55,17 +44,10 @@ const EDGE_SLOTS = [
 ]
 
 const uSlot = (x: number, z: number) => (x + 1) + 3 * 2 + 9 * (z + 1)
-/**
- * A slot in a side row, in the order the row is drawn.
- *
- * The index counts from the left of that face as seen from outside, and the
- * right face runs the other way round to the rest, so it has to be handled
- * separately. Reading a row the wrong way round swaps its two end corners, which
- * describes a different cube than the one being looked at.
- */
+/** Row positions from left to right when facing the side from outside. */
 const sideSlot = (face: Color, i: number) => {
   const v = sideVec(face)
-  const along = v.x === 1 ? [1, 0, -1] : [-1, 0, 1]
+  const along = v.x === 1 || v.z === -1 ? [1, 0, -1] : [-1, 0, 1]
   const t = along[i]
   return v.x !== 0 ? v.x + 1 + 3 * 2 + 9 * (t + 1) : t + 1 + 3 * 2 + 9 * (v.z + 1)
 }
@@ -205,24 +187,17 @@ const parity = (p: number[]) => {
 
 /** How many top corners sit in their own place, a twisted one counting as wrong. */
 export function countCornersHome(n: Net): number {
-  const row = (f: Color) => n.sideRows[SIDE_FACES.indexOf(f)].colors
-  const spots: [number, Color, number][] = [
-    [0, 'F', 0],
-    [2, 'F', 2],
-    [8, 'B', 2],
-    [6, 'B', 0],
-  ]
-  return spots.filter(([top, face, i]) => n.uFace[top] === row(face)[i]).length
+  const cube = netToCube(n)
+  return homesOf(cube).corners.filter((home, i) => home === i && colorAt(cube, U_CORNERS[i], U_DIR) === 'U').length
 }
 
 function describe(n: Net): string {
-  const correctCorners = [0, 1, 2, 3].filter((i) => {
-    const c = n.uFace[[0, 2, 8, 6][i]]
-    return c === n.sideRows[i].colors[i] || c === n.sideRows[i].colors[2 - i]
-  }).length
+  const correctCorners = countCornersHome(n)
   const correctEdges = [0, 1, 2, 3].filter((i) => n.sideRows[i].colors[1] === n.sideRows[i].face).length
   return `에지 제자리 ${correctEdges}개, 코너 제자리 ${correctCorners}개`
 }
+
+let cachedCases: CaseNet[] | undefined
 
 /**
  * Every last-layer permutation, folded by rotation, as pictures.
@@ -238,6 +213,7 @@ function describe(n: Net): string {
  * it is worse than no gallery.
  */
 export function buildCases(): CaseNet[] {
+  if (cachedCases) return cachedCases
   const seen = new Set<string>()
   const cases: CaseNet[] = []
   const perms = perm4()
@@ -269,5 +245,22 @@ export function buildCases(): CaseNet[] {
       })
     }
   }
+  cachedCases = cases
   return cases
+}
+
+/** Return the rotation of each picture that matches the user's actual grip. */
+export function pllQuestionMatches(cases: CaseNet[], corners: number, edges: number) {
+  return cases.flatMap((c) => {
+    const variants = []
+    let net: Net = c
+    for (let turn = 0; turn < 4; turn++) {
+      const edgesHome = net.sideRows.filter((row) => row.colors[1] === row.face).length
+      if (edgesHome === edges && countCornersHome(net) === corners) {
+        variants.push({ ...net, id: `${c.id}-${turn}`, label: c.label })
+      }
+      net = rotateNetU(net)
+    }
+    return variants
+  })
 }

@@ -11,7 +11,7 @@ import { createSolvedCube } from '../cube/model'
  */
 const facing: Record<string, { screen: (x: number, z: number) => number }> = {
   F: { screen: (x) => x },            // looking along -z, +x is to the right
-  B: { screen: (x) => x },            // looking along +z, +x is to the right
+  B: { screen: (x) => -x },           // looking along +z, -x is to the right
   R: { screen: (_x, z) => -z },       // looking along -x, -z is to the right
   L: { screen: (_x, z) => z },        // looking along +x, +z is to the right
 }

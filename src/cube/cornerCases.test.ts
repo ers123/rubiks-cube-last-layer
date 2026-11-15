@@ -7,7 +7,7 @@ import { applySequence } from './model'
 const cases = buildCornerCases()
 
 describe('the corner-stage gallery', () => {
-  it('holds every one of the corner-stage states', () => {
+  it('holds 143 verified corner-stage examples', () => {
     expect(cases).toHaveLength(143)
   })
 

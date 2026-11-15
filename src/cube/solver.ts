@@ -19,9 +19,8 @@ import {
  * deliberately tiny alphabet, for the shortest sequence that solves the layer,
  * and only ever return a solution that has been re-simulated and verified.
  *
- * The search is split into the two phases a beginner already knows:
- *   1. OLL - get all four U corners pointing up.   alphabet: U turns + Sune family
- *   2. PLL - permute the rest.                    alphabet: U turns + perm algs
+ * A single search combines U turns and all four algorithms. Every result is
+ * replayed on the input before the solver returns it.
  */
 
 /**
@@ -148,19 +147,19 @@ export function validateLastLayer(cube: Cube): string[] {
   const { corners, edges } = homesOf(cube)
 
   if (colorAt(cube, { x: 0, y: 1, z: 0 }, U_DIR) !== 'U') {
-    problems.push('위쪽 면 가운데 스티커는 항상 흰색(U)이어야 합니다.')
+    problems.push('윗면 가운데 스티커가 선택한 윗면 중심색과 달라요.')
   }
   if (corners.some((c) => c < 0)) {
-    problems.push('어떤 코너에 흰색 스티커가 없습니다. 코너에는 흰색이 하나씩 있어야 합니다.')
+    problems.push('윗면 중심색이 없는 코너가 있거나 코너의 색 조합이 맞지 않아요.')
   }
   if (corners.filter((c) => c >= 0).length < 4) {
-    problems.push('흰색 코너가 4개보다 적습니다.')
+    problems.push('윗면의 코너 네 개를 모두 확인해 주세요.')
   }
   if (new Set(corners.filter((c) => c >= 0)).size !== 4) {
     problems.push('같은 코너가 두 번씩 들어가 있습니다. 각 코너는 하나씩만 있어야 합니다.')
   }
   if (edges.some((e) => e < 0)) {
-    problems.push('어떤 에지에 흰색 스티커가 없습니다.')
+    problems.push('윗면 중심색이 없는 엣지가 있거나 엣지의 색 조합이 맞지 않아요.')
   }
   if (new Set(edges.filter((e) => e >= 0)).size !== 4) {
     problems.push('같은 에지가 두 번씩 들어가 있습니다. 각 에지는 하나씩만 있어야 합니다.')
@@ -232,9 +231,8 @@ function bfs(
 }
 
 /**
- * Complete last-layer state: which cubie is in each U slot, whether the corners
- * are twisted and whether the edges are flipped. Nothing about the last layer
- * is left out, so two states share a key only if they are genuinely identical.
+ * Search key for the last layer. It records the pieces in each slot and whether
+ * they face up. Both directions of a corner twist share the same orientation bit.
  */
 export function stateKey(cube: Cube): string {
   const { corners, edges } = homesOf(cube)

@@ -2,7 +2,6 @@ import { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 're
 import * as THREE from 'three'
 import {
   slotFromIndex,
-  applyMove,
   FACE_COLORS,
   type Color,
   type Cube,
@@ -17,15 +16,14 @@ const STICKER_SIZE = 0.86
 
 export type CubeViewHandle = {
   /** Play a move, resolving when the animation finishes. */
-  play: (move: Move) => Promise<void>
+  play: (move: Move, before: Cube, after: Cube) => Promise<void>
   /** Flash the given slots. */
   highlight: (slots: Slot[]) => void
 }
 
 type Props = {
   cube: Cube
-  /** Bump this to force a full rebuild (input change / reset). */
-  revision: number
+  colors?: Record<Color, string>
   size?: number
   /** Called once if 3D is unavailable, so the app can fall back to 2D. */
   onUnavailable?: () => void
@@ -38,19 +36,17 @@ const FACE_SIGN: Record<string, number> = { R: 1, L: -1, U: 1, D: -1, F: 1, B: -
 const DIR_ANGLE: Record<number, number> = { 1: 1, 2: 2, 3: -1 }
 
 export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
-  { cube, revision, size = 320, onUnavailable },
+  { cube, colors = FACE_COLORS, size = 320, onUnavailable },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
   const groupsRef = useRef<THREE.Group[]>([])
   const meshesRef = useRef<{ slot: number; dir: Vec3; mesh: THREE.Mesh; base: THREE.Color }[]>([])
-  const stateRef = useRef<{ cube: Cube; busy: boolean }>({ cube, busy: false })
   const highlightRef = useRef<THREE.Mesh[]>([])
+  const renderRef = useRef<() => void>()
   const rafRef = useRef<number>()
   const rendererOkRef = useRef(true)
   const [noScene, setNoScene] = useState(false)
-
-  stateRef.current.cube = cube
 
   // --- scene setup (once) ---
   useEffect(() => {
@@ -124,15 +120,10 @@ export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
       groupsRef.current[i].add(m)
     }
 
-    const idle = () => {
-      rafRef.current = requestAnimationFrame(idle)
-      root.rotation.y += 0.0035
-      renderer.render(scene, camera)
-    }
-    idle()
-
+    renderRef.current = () => renderer.render(scene, camera)
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      renderRef.current = undefined
       renderer.dispose()
       host.removeChild(renderer.domElement)
     }
@@ -155,7 +146,7 @@ export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
       )
       if (!st) continue
       const mat = rec.mesh.material as THREE.MeshStandardMaterial
-      mat.color.set(FACE_COLORS[st.color as Color])
+      mat.color.set(colors[st.color])
       rec.mesh.userData.baseColor = mat.color.clone()
     }
   }
@@ -170,25 +161,21 @@ export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
       groupsRef.current[i].userData.slotVec = new THREE.Vector3(s.x, s.y, s.z)
     }
     sync(c)
+    renderRef.current?.()
   }
 
   useEffect(() => {
     place(cube)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revision, noScene])
+  }, [cube, colors, noScene])
 
   useImperativeHandle(
     ref,
     () => ({
-      play: (move: Move) =>
+      play: (move: Move, before: Cube, after: Cube) =>
         new Promise<void>((resolve) => {
-          if (!rendererOkRef.current) {
-            // still advance the model so the app keeps working without 3D
-            applyMove(stateRef.current.cube, move)
-            return resolve()
-          }
-          if (stateRef.current.busy) return resolve()
-          stateRef.current.busy = true
+          if (!rendererOkRef.current) return resolve()
+          place(before)
           const axis = FACE_AXIS[move.face]
           const sign = FACE_SIGN[move.face]
           const dir = new THREE.Vector3(
@@ -196,7 +183,7 @@ export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
             axis === 'y' ? 1 : 0,
             axis === 'z' ? 1 : 0
           )
-          const angle = ((DIR_ANGLE[move.amount] * Math.PI) / 2) * sign
+          const angle = ((DIR_ANGLE[move.amount] * Math.PI) / 2) * -sign
 
           const layer: THREE.Group[] = []
           for (let i = 0; i < 27; i++) {
@@ -217,19 +204,14 @@ export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
               if (s) g.position.copy(s).applyQuaternion(partial)
             }
             if (k < 1) {
-              requestAnimationFrame(tick)
+              renderRef.current?.()
+              rafRef.current = requestAnimationFrame(tick)
             } else {
-              for (const g of layer) {
-                g.quaternion.identity()
-                g.rotation.set(0, 0, 0)
-              }
-              place(stateRef.current.cube)
-              applyMove(stateRef.current.cube, move)
-              stateRef.current.busy = false
+              place(after)
               resolve()
             }
           }
-          requestAnimationFrame(tick)
+          rafRef.current = requestAnimationFrame(tick)
         }),
       highlight: (slots: Slot[]) => {
         if (!rendererOkRef.current) return
@@ -246,10 +228,9 @@ export const CubeView = forwardRef<CubeViewHandle, Props>(function CubeView(
           mat.emissive.set(0x333333)
           highlightRef.current.push(rec.mesh)
         }
+        renderRef.current?.()
       },
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    })
   )
 
   return <div ref={hostRef} style={{ width: size, height: size, margin: '0 auto' }} />

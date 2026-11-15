@@ -10,7 +10,7 @@ describe('what to look at', () => {
     expect(o.wrongCorners).toBe(0)
     expect(o.wrongEdges).toBe(0)
     expect(o.finished).toBe(true)
-    expect(o.look).toMatch(/더 볼 게 없/)
+    expect(o.look).toMatch(/옆면 네 줄이 모두 맞/)
   })
 
   it('counts what is still wrong on every case in the gallery', () => {

@@ -1,27 +1,12 @@
 import { createSolvedCube, cloneCube, applySequence, type Cube } from './model'
 import { solveLastLayer, isLastLayerSolved, homesOf, areEdgesOriented, validateLastLayer, stateKey, caseNameOf } from './solver'
-import { netOf, SIDE_FACES, type Net, type CaseNet } from './cases'
+import { netOf, countCornersHome, SIDE_FACES, type Net, type CaseNet } from './cases'
 
 /**
- * The corner stage, taken from the solver's own state space.
- *
- * The bottom two layers are assumed finished and so are the top edges once the
- * cross is in place, which leaves only the corners to be turned: 143 states.
- *
- * Every state here is reached by running real moves from the finished cube and
- * is kept only if `validateLastLayer` accepts it, so none of them can be
- * fabricated. Earlier attempts built these by moving stickers around by hand and
- * got it wrong repeatedly — sticker order differs between slots, moving a piece
- * between positions is a rotation rather than a translation, and a permutation
- * is a set of swaps, so writing into a slot a later move still reads from
- * corrupts the result.
- *
- * The search converges on its own. Only states that are still valid last layers
- * enter the queue, so it walks the last layer rather than wandering through
- * broken cubes, and it stops when nothing new is reachable. The count is
- * therefore a result, not a target: it was measured at 143 and pinned in a test.
+ * Verified gallery examples with both lower layers solved and all U edges home.
+ * The walk uses the solver's search key, which merges the two twist directions,
+ * so the gallery count describes its examples rather than every possible state.
  */
-
 const GENERATORS = [
   'U',
   "U'",
@@ -33,7 +18,7 @@ const GENERATORS = [
   "U R U' L' U R' U' L",
 ]
 
-/** Every corner-stage state, folded so that turning the cube does not duplicate one. */
+/** Walk reachable representatives and collect states with all U edges home. */
 function walk(): Cube[] {
   const seen = new Map<string, Cube>()
   const start = createSolvedCube()
@@ -102,7 +87,7 @@ export function buildCornerCases(): CaseNet[] {
       id: `corners-${out.length}`,
       label: `코너 ${out.length + 1}`,
       summary: cornerSummary(cube),
-      cornersHome: cornerCount(net),
+      cornersHome: countCornersHome(net),
       edgesHome: SIDE_FACES.filter((f, i) => net.sideRows[i].colors[1] === f).length,
       topAllWhite: net.uFace.every((c) => c === 'U'),
       solution,
@@ -112,23 +97,11 @@ export function buildCornerCases(): CaseNet[] {
   return out
 }
 
-/** How many top corners sit in their own place, a twisted one counting as wrong. */
-export function cornerCount(n: Net): number {
-  const row = (f: string) => n.sideRows[SIDE_FACES.indexOf(f as never)].colors
-  const spots: [number, string, number][] = [
-    [0, 'F', 0],
-    [2, 'F', 2],
-    [8, 'B', 2],
-    [6, 'B', 0],
-  ]
-  return spots.filter(([top, face, i]) => n.uFace[top] === row(face)[i]).length
+function cornerSummary(cube: Cube): string {
+  return `완전히 맞은 코너 ${countCornersHome(netOf(cube))}개`
 }
 
-function cornerSummary(cube: Cube): string {
-  const n = netOf(cube)
-  const home = cornerCount(n)
-  return home === 4 ? '모서리는 다 맞아요, 엣지만 뒤섞였어요' : `모서리 ${home}개가 제자리, 나머지는 뒤틀림`
-}
+export { countCornersHome as cornerCount } from './cases'
 
 /** Kept for callers that only want the reason a cube is in the state it is in. */
 export { caseNameOf }

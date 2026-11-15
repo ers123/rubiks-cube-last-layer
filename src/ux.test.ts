@@ -45,7 +45,7 @@ it('an illegal hand-typed state is rejected with a readable message', () => {
 
   const problems = validateLastLayer(c)
   expect(problems.length).toBeGreaterThan(0)
-  expect(problems.join(' ')).toMatch(/흰색/)
+  expect(problems.join(' ')).toMatch(/윗면 중심색/)
 
   const sol = solveLastLayer(c)
   expect(sol.failure).toBeDefined()

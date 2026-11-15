@@ -31,6 +31,7 @@ page.on('pageerror', (e) => errors.push(e.message))
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
 
 await page.goto('http://localhost:4321/', { waitUntil: 'networkidle' })
+await page.getByLabel('윗면', { exact: true }).selectOption('D')
 
 const shown = 72
 await page.click('text=질문 3개로 좁히기')
@@ -39,10 +40,10 @@ const answer = async (label) => {
   await page.locator('.qp-opt', { hasText: label }).first().click()
   await page.waitForTimeout(260)
 }
-// a real answer set: top all white, no corner home, no row correct (28 cases)
-await answer('네, 전부 흰색')
+// a real answer set: top all white, no corner home, no row correct (45 rotations)
+await answer('네, 모두 같은 색이에요')
 await answer('0개')
-await answer('0줄')
+await answer('0곳')
 const afterQuestions = await page.locator('.case').count()
 if (afterQuestions === 0) {
   console.error('FAIL: answering all three questions left nothing to choose from')
@@ -52,19 +53,33 @@ if (afterQuestions >= shown) {
   console.error(`FAIL: three questions did not narrow anything (${afterQuestions} of ${shown})`)
   process.exit(1)
 }
-if (afterQuestions !== 28) {
-  console.error(`FAIL: expected that answer set to leave 28 cases, got ${afterQuestions}`)
+if (afterQuestions !== 45) {
+  console.error(`FAIL: expected that answer set to leave 45 rotations, got ${afterQuestions}`)
   process.exit(1)
 }
-console.log(`PASS: three questions cut ${shown} cases down to ${afterQuestions}`)
-// a state with a mixed top face is not in the list, and the app has to say so
+const center = await page.locator('.case-u i').nth(4).evaluate((el) => el.style.backgroundColor)
+if (center !== 'rgb(244, 196, 48)') throw new Error('The result pictures lost the chosen yellow top color')
+console.log(`PASS: three questions found ${afterQuestions} matching PLL positions with the chosen yellow top`)
+// A single mismatched edge is impossible in PLL. Show all images without submitting one.
+await page.getByRole('button', { name: '이전 질문' }).click()
+await answer('3곳')
+await page.getByRole('button', { name: '이 단계의 그림 72개 보기' }).click()
+if (await page.locator('.gallery-grid .case').count() !== 72) {
+  throw new Error('The no-match fallback did not open all 72 pictures')
+}
+
 await page.locator('.qp-foot button', { hasText: '처음부터' }).click()
-await page.waitForTimeout(200)
 await answer('아니오, 다른 색이 섞여 있어요')
+await page.locator('.cross-example .case-u').waitFor()
+await answer('아니오 / 잘 모르겠어요')
+await page.getByText(/직접 입력으로 확인할 수 있어요/).waitFor()
+if (await page.locator('.gallery-grid .case').count() !== 0) {
+  throw new Error('Corner examples were shown without aligned edges')
+}
+await page.getByRole('button', { name: '이전 질문' }).click()
+await answer('네, 십자와 옆면 네 곳이 맞아요')
 await answer('0개')
-// the corner stage never asks about the side rows: they are all correct there
-// A top face with other colours in it is the corner stage, which has its own
-// cases now, so it must narrow to something rather than giving up.
+await page.locator('.gallery-grid .case').first().waitFor({ timeout: 60000 })
 const ollCases = await page.locator('.case').count()
 if (ollCases === 0) {
   console.error('FAIL: the corner stage found nothing to offer')
@@ -82,6 +97,9 @@ if (!/지금 볼 것/.test(ollWatch ?? '') || !ollWhy) {
   process.exit(1)
 }
 console.log(`  corner stage: ${ollWatch.trim().slice(7, 46)}`)
+await page.getByRole('button', { name: '전체 재생' }).click()
+await page.getByRole('status').filter({ hasText: '마지막 층 완성!' }).waitFor({ timeout: 60000 })
+console.log('PASS: the corner solution finishes from the question flow')
 const back2 = page.locator('button', { hasText: '다른 그림 고르기' }).first()
 if ((await back2.count()) === 0) {
   console.error('FAIL: no way back from a corner-stage solution')
@@ -152,6 +170,7 @@ if (empty > 0) {
 console.log('PASS: every picture has all nine top stickers drawn')
 
 // pick a case, and check the moves it produces actually finish the cube
+let playedMultipleSteps = false
 for (const index of [0, 17, 40, 71]) {
   await page.locator('.case').nth(index).click()
   await page.waitForSelector('.steps, .verdict', { timeout: 10000 })
@@ -178,6 +197,19 @@ for (const index of [0, 17, 40, 71]) {
     process.exit(1)
   }
   console.log(`  case ${index + 1}: ${verdict.trim().slice(0, 26)} | ${watch.trim().slice(7, 52)}`)
+  if (!playedMultipleSteps && steps > 1) {
+    if (!(await page.locator('.steps li button').nth(1).isDisabled())) {
+      throw new Error('A future step can be played out of order')
+    }
+    await page.getByRole('button', { name: '다음 단계' }).click()
+    const remaining = page.getByRole('button', { name: '남은 단계 재생' })
+    await remaining.waitFor({ timeout: 30000 })
+    if (await page.getByRole('status').count() !== 0) throw new Error('Completed before all steps ran')
+    await remaining.click({ timeout: 30000 })
+    await page.getByRole('status').filter({ hasText: '마지막 층 완성!' }).waitFor({ timeout: 60000 })
+    playedMultipleSteps = true
+    console.log('PASS: a multi-step solution blocks skipped steps and only finishes after the remaining steps')
+  }
   const back = page.locator('button', { hasText: '다른 그림 고르기' }).first()
   if ((await back.count()) === 0) {
     console.error('FAIL: no way back to the gallery')
@@ -186,6 +218,7 @@ for (const index of [0, 17, 40, 71]) {
   await back.click()
   await page.waitForSelector('.case', { timeout: 10000 })
 }
+if (!playedMultipleSteps) throw new Error('No multi-step case was exercised')
 console.log('PASS: picking a case leads to a solution, for 4 different cases')
 
 if (errors.length) {
